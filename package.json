@@ -1,0 +1,145 @@
+{
+  "name": "superapi",
+  "displayName": "SuperAPI",
+  "description": "A Postman-style API development and testing tool for VS Code. Browse, test, and debug OpenAPI endpoints directly in your editor.",
+  "version": "0.0.1",
+  "publisher": "superapi",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "api",
+    "openapi",
+    "swagger",
+    "rest",
+    "http",
+    "postman",
+    "api-testing",
+    "api-client"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SuperAPI",
+      "properties": {
+        "superapi.apiDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the directory containing OpenAPI specification files. If empty, defaults to workspace root."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "superapi",
+          "title": "SuperAPI",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "superapi": [
+        {
+          "id": "superapi.apiExplorer",
+          "name": "API Explorer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "superapi.refresh",
+        "title": "Refresh",
+        "category": "SuperAPI",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "superapi.openEndpoint",
+        "title": "Open Endpoint",
+        "category": "SuperAPI"
+      },
+      {
+        "command": "superapi.toggleGroupByTags",
+        "title": "Toggle Group by Tags",
+        "category": "SuperAPI",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "superapi.createEnvironment",
+        "title": "Create Environment",
+        "category": "SuperAPI"
+      },
+      {
+        "command": "superapi.selectEnvironment",
+        "title": "Select Environment",
+        "category": "SuperAPI"
+      },
+      {
+        "command": "superapi.editEnvironment",
+        "title": "Edit Environment",
+        "category": "SuperAPI"
+      },
+      {
+        "command": "superapi.setApiFolder",
+        "title": "Set API Folder",
+        "category": "SuperAPI",
+        "icon": "$(folder-opened)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "superapi.refresh",
+          "when": "view == superapi.apiExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "superapi.toggleGroupByTags",
+          "when": "view == superapi.apiExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "superapi.setApiFolder",
+          "when": "view == superapi.apiExplorer",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "superapi.apiExplorer",
+        "contents": "No API folder configured.\n[Set API Folder](command:superapi.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started."
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "@vscode/webview-ui-toolkit": "^1.4.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8"
+  }
+}
