@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage } from '../models/types';
+import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage, SchemaObject } from '../models/types';
 
 export class ApiPanel {
   public static currentPanel: ApiPanel | undefined;
@@ -113,20 +113,27 @@ export class ApiPanel {
       }
     );
 
-    // Set the panel icon
-    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'resources', 'icon.svg');
+    // Set the panel icon (light and dark theme variants)
+    panel.iconPath = {
+      light: vscode.Uri.joinPath(extensionUri, 'resources', 'icon-light.svg'),
+      dark: vscode.Uri.joinPath(extensionUri, 'resources', 'icon-dark.svg')
+    };
 
     ApiPanel.currentPanel = new ApiPanel(panel, extensionUri);
     return ApiPanel.currentPanel;
   }
 
-  public showEndpoint(endpoint: ApiEndpoint, servers: { url: string; description?: string }[]): void {
+  public showEndpoint(
+    endpoint: ApiEndpoint,
+    servers: { url: string; description?: string }[],
+    components?: Record<string, Record<string, SchemaObject>>
+  ): void {
     this.currentEndpoint = endpoint;
     this.panel.title = `${endpoint.method.toUpperCase()} ${endpoint.path}`;
 
     this.postMessage({
       type: 'showEndpoint',
-      payload: { endpoint, servers }
+      payload: { endpoint, servers, components }
     });
   }
 
@@ -274,6 +281,7 @@ export class ApiPanel {
 
     <div id="main-tabs">
       <button class="main-tab-btn active" data-main-tab="details">Details</button>
+      <button class="main-tab-btn" data-main-tab="components" id="components-tab-btn" style="display: none;">Components</button>
       <button class="main-tab-btn" data-main-tab="request">Request</button>
     </div>
 
@@ -300,6 +308,10 @@ export class ApiPanel {
             <div id="responses-content" class="section-content"></div>
           </section>
         </div>
+      </div>
+
+      <div id="components-tab" class="main-tab-content">
+        <div id="components-content"></div>
       </div>
 
       <div id="request-tab" class="main-tab-content">

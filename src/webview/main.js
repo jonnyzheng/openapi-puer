@@ -3,13 +3,13 @@
 
   let currentEndpoint = null;
   let currentServers = [];
+  let currentComponents = null;
   let isLoading = false;
   let startTime = null;
   let elapsedInterval = null;
 
   // DOM Elements
   const methodBadge = document.getElementById('method-badge');
-  const endpointPath = document.getElementById('endpoint-path');
   const environmentSelect = document.getElementById('environment-select');
   const metadataContent = document.getElementById('metadata-content');
   const parametersSection = document.getElementById('parameters-section');
@@ -98,6 +98,11 @@
     document.querySelectorAll('.main-tab-content').forEach(content => {
       content.classList.toggle('active', content.id === `${tabName}-tab`);
     });
+
+    // Render components when switching to components tab
+    if (tabName === 'components' && currentComponents) {
+      renderComponents();
+    }
   }
 
   function setupCollapsibleSections() {
@@ -114,7 +119,7 @@
     const message = event.data;
     switch (message.type) {
       case 'showEndpoint':
-        showEndpoint(message.payload.endpoint, message.payload.servers);
+        showEndpoint(message.payload.endpoint, message.payload.servers, message.payload.components);
         break;
       case 'responseReceived':
         showResponse(message.payload);
@@ -826,29 +831,53 @@
     parametersContent.appendChild(createEditableParametersTable(currentEndpoint.parameters));
   }
 
-  function showEndpoint(endpoint, servers) {
+  function showEndpoint(endpoint, servers, components) {
     currentEndpoint = endpoint;
     currentServers = servers || [];
+    currentComponents = components || null;
+
+    // Show/hide Components tab based on whether components exist
+    const componentsTabBtn = document.getElementById('components-tab-btn');
+    if (componentsTabBtn) {
+      if (currentComponents && Object.keys(currentComponents).length > 0) {
+        componentsTabBtn.style.display = '';
+      } else {
+        componentsTabBtn.style.display = 'none';
+        // If currently on components tab and no components, switch to details
+        if (componentsTabBtn.classList.contains('active')) {
+          switchMainTab('details');
+        }
+      }
+    }
+
+    // Clear components content so it re-renders when tab is clicked
+    const componentsContent = document.getElementById('components-content');
+    if (componentsContent) {
+      componentsContent.innerHTML = '';
+    }
+
+    // Always switch to details tab when loading a new endpoint
+    switchMainTab('details');
 
     // Update header
     methodBadge.textContent = endpoint.method.toUpperCase();
     methodBadge.className = 'method-badge ' + endpoint.method;
 
-    // Make path editable
-    endpointPath.textContent = endpoint.path;
-    endpointPath.className = 'endpoint-path editable';
-    endpointPath.title = 'Click to edit path';
-
-    // Remove old listener if exists
-    const newEndpointPath = endpointPath.cloneNode(true);
-    endpointPath.parentNode.replaceChild(newEndpointPath, endpointPath);
-
-    // Update reference
+    // Make path editable - always get fresh reference from DOM
     const pathElement = document.getElementById('endpoint-path');
-    pathElement.addEventListener('click', () => {
-      if (pathElement.classList.contains('editing')) return;
 
-      pathElement.classList.add('editing');
+    // Remove old listener by cloning
+    const newPathElement = pathElement.cloneNode(false);
+    newPathElement.textContent = endpoint.path;
+    newPathElement.className = 'endpoint-path editable';
+    newPathElement.title = 'Click to edit path';
+    pathElement.parentNode.replaceChild(newPathElement, pathElement);
+
+    // Add click listener to the new element
+    newPathElement.addEventListener('click', () => {
+      if (newPathElement.classList.contains('editing')) return;
+
+      newPathElement.classList.add('editing');
       const currentValue = currentEndpoint.path;
 
       const input = document.createElement('input');
@@ -856,15 +885,15 @@
       input.className = 'path-edit-input';
       input.value = currentValue;
 
-      pathElement.textContent = '';
-      pathElement.appendChild(input);
+      newPathElement.textContent = '';
+      newPathElement.appendChild(input);
       input.focus();
       input.select();
 
       const finishEdit = () => {
         const newValue = input.value.trim();
-        pathElement.classList.remove('editing');
-        pathElement.textContent = newValue || currentValue;
+        newPathElement.classList.remove('editing');
+        newPathElement.textContent = newValue || currentValue;
 
         if (newValue && newValue !== currentValue) {
           savePath(currentValue, newValue);
@@ -1430,6 +1459,121 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function renderComponents() {
+    const componentsContent = document.getElementById('components-content');
+    if (!componentsContent || !currentComponents) return;
+
+    componentsContent.innerHTML = '';
+
+    // Render each component category (schemas, responses, parameters)
+    for (const [category, items] of Object.entries(currentComponents)) {
+      const categorySection = document.createElement('section');
+      categorySection.className = 'section';
+
+      const categoryHeader = document.createElement('h3');
+      categoryHeader.className = 'section-header collapsible';
+      categoryHeader.textContent = capitalizeFirst(category);
+      categoryHeader.addEventListener('click', () => {
+        categoryHeader.classList.toggle('collapsed');
+        categoryContent.classList.toggle('hidden');
+      });
+
+      const categoryContent = document.createElement('div');
+      categoryContent.className = 'section-content';
+
+      // Render each component in this category
+      for (const [name, schema] of Object.entries(items)) {
+        const componentCard = document.createElement('div');
+        componentCard.className = 'component-card';
+
+        const componentHeader = document.createElement('div');
+        componentHeader.className = 'component-header';
+
+        const componentName = document.createElement('span');
+        componentName.className = 'component-name';
+        componentName.textContent = name;
+
+        const componentType = document.createElement('span');
+        componentType.className = 'component-type';
+        componentType.textContent = schema.type || 'object';
+
+        componentHeader.appendChild(componentName);
+        componentHeader.appendChild(componentType);
+        componentCard.appendChild(componentHeader);
+
+        if (schema.description) {
+          const componentDesc = document.createElement('div');
+          componentDesc.className = 'component-description';
+          componentDesc.textContent = schema.description;
+          componentCard.appendChild(componentDesc);
+        }
+
+        // Render properties if it's an object schema
+        if (schema.properties) {
+          const propsTable = document.createElement('table');
+          propsTable.className = 'component-props-table';
+
+          const thead = document.createElement('thead');
+          thead.innerHTML = '<tr><th>Property</th><th>Type</th><th>Description</th></tr>';
+          propsTable.appendChild(thead);
+
+          const tbody = document.createElement('tbody');
+          for (const [propName, propSchema] of Object.entries(schema.properties)) {
+            const row = document.createElement('tr');
+
+            const nameCell = document.createElement('td');
+            const isRequired = schema.required && schema.required.includes(propName);
+            nameCell.innerHTML = `<code>${escapeHtml(propName)}</code>${isRequired ? '<span class="required-badge">required</span>' : ''}`;
+
+            const typeCell = document.createElement('td');
+            let typeStr = propSchema.type || 'any';
+            if (propSchema.$ref) {
+              typeStr = `<a class="schema-ref" href="#" data-ref="${escapeHtml(propSchema.$ref)}">${escapeHtml(propSchema.$ref)}</a>`;
+            } else if (propSchema.type === 'array' && propSchema.items) {
+              if (propSchema.items.$ref) {
+                typeStr = `array&lt;<a class="schema-ref" href="#" data-ref="${escapeHtml(propSchema.items.$ref)}">${escapeHtml(propSchema.items.$ref)}</a>&gt;`;
+              } else {
+                typeStr = `array&lt;${escapeHtml(propSchema.items.type || 'any')}&gt;`;
+              }
+            }
+            if (propSchema.format) {
+              typeStr += ` (${escapeHtml(propSchema.format)})`;
+            }
+            typeCell.innerHTML = typeStr;
+
+            const descCell = document.createElement('td');
+            descCell.textContent = propSchema.description || '';
+
+            row.appendChild(nameCell);
+            row.appendChild(typeCell);
+            row.appendChild(descCell);
+            tbody.appendChild(row);
+          }
+          propsTable.appendChild(tbody);
+          componentCard.appendChild(propsTable);
+        }
+
+        // Render enum values if present
+        if (schema.enum) {
+          const enumDiv = document.createElement('div');
+          enumDiv.className = 'component-enum';
+          enumDiv.innerHTML = '<strong>Enum values:</strong> ' + schema.enum.map(v => `<code>${escapeHtml(String(v))}</code>`).join(', ');
+          componentCard.appendChild(enumDiv);
+        }
+
+        categoryContent.appendChild(componentCard);
+      }
+
+      categorySection.appendChild(categoryHeader);
+      categorySection.appendChild(categoryContent);
+      componentsContent.appendChild(categorySection);
+    }
+  }
+
+  function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
   init();

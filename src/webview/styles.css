@@ -1075,3 +1075,121 @@ input[type="text"]:focus, textarea:focus {
 .path-param-row .required-indicator {
   color: var(--vscode-errorForeground);
 }
+
+/* Components tab styles */
+#components-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.component-card {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.component-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.component-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--vscode-symbolIcon-classForeground);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.component-type {
+  padding: 2px 8px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.component-description {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.component-props-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.component-props-table th,
+.component-props-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.component-props-table th {
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-sideBar-background);
+}
+
+.component-props-table th:first-child {
+  width: 30%;
+}
+
+.component-props-table th:nth-child(2) {
+  width: 25%;
+}
+
+.component-props-table td code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  background-color: var(--vscode-textCodeBlock-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.component-props-table .required-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background-color: rgba(241, 76, 76, 0.2);
+  color: var(--vscode-errorForeground);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.component-props-table .schema-ref {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.component-props-table .schema-ref:hover {
+  text-decoration: underline;
+}
+
+.component-enum {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background-color: var(--vscode-sideBar-background);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.component-enum code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  background-color: var(--vscode-textCodeBlock-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin: 0 2px;
+}

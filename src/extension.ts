@@ -260,11 +260,12 @@ async function refreshApiFiles(): Promise<void> {
 function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoint): void {
   const panel = ApiPanel.createOrShow(context.extensionUri);
 
-  // Find the API file for this endpoint to get servers
+  // Find the API file for this endpoint to get servers and components
   const apiFile = apiFiles.find(f => f.filePath === endpoint.filePath);
   const servers = apiFile?.servers || [];
+  const components = apiFile?.components;
 
-  panel.showEndpoint(endpoint, servers);
+  panel.showEndpoint(endpoint, servers, components);
   updatePanelEnvironments();
 
   // Only register handlers once

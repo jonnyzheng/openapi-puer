@@ -42,6 +42,54 @@
             }
           }
         }
+      },
+      "get": {
+        "summary": "List tasks list",
+        "operationId": "listTasks",
+        "tags": [
+          "Tasks",
+          "jack"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "in_progress",
+                "completed"
+              ]
+            },
+            "required": true,
+            "description": "hello"
+          },
+          {
+            "name": "jacky",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
       }
     },
     "/tasks/{taskId}": {
@@ -154,56 +202,6 @@
             "description": "Webhook registered"
           }
         }
-      }
-    },
-    "/tasks/checks/lalalla": {
-      "get": {
-        "summary": "List tasks list",
-        "operationId": "listTasks",
-        "tags": [
-          "Tasks",
-          "jack"
-        ],
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "pending",
-                "in_progress",
-                "completed"
-              ]
-            },
-            "required": true,
-            "description": "hello"
-          },
-          {
-            "name": "jacky",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of tasks",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Task"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "deprecated": true
       }
     }
   },

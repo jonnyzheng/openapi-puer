@@ -64,7 +64,8 @@ export class OpenApiService {
         title: this.getTitle(spec),
         description: this.getDescription(spec),
         servers: this.getServers(spec),
-        endpoints: this.extractEndpoints(filePath, spec)
+        endpoints: this.extractEndpoints(filePath, spec),
+        components: this.extractComponents(spec)
       };
 
       this.cache.set(filePath, { mtime: stat.mtimeMs, apiFile });
@@ -399,6 +400,56 @@ export class OpenApiService {
     }
 
     return [];
+  }
+
+  private extractComponents(spec: OpenAPI.Document): Record<string, Record<string, SchemaObject>> | undefined {
+    const result: Record<string, Record<string, SchemaObject>> = {};
+
+    // OpenAPI 3.x components
+    const v3Spec = spec as OpenAPIV3.Document;
+    if (v3Spec.components) {
+      if (v3Spec.components.schemas) {
+        result.schemas = {};
+        for (const [name, schema] of Object.entries(v3Spec.components.schemas)) {
+          result.schemas[name] = this.extractSchema(schema, spec) || {};
+        }
+      }
+      if (v3Spec.components.responses) {
+        result.responses = {};
+        for (const [name, response] of Object.entries(v3Spec.components.responses)) {
+          const resolved = this.resolveRef(response, spec) as OpenAPIV3.ResponseObject;
+          if (resolved) {
+            result.responses[name] = {
+              description: resolved.description,
+              type: 'response'
+            } as SchemaObject;
+          }
+        }
+      }
+      if (v3Spec.components.parameters) {
+        result.parameters = {};
+        for (const [name, param] of Object.entries(v3Spec.components.parameters)) {
+          const resolved = this.resolveRef(param, spec) as OpenAPIV3.ParameterObject;
+          if (resolved) {
+            result.parameters[name] = {
+              type: resolved.schema ? (resolved.schema as OpenAPIV3.SchemaObject).type : 'string',
+              description: resolved.description
+            } as SchemaObject;
+          }
+        }
+      }
+    }
+
+    // OpenAPI 2.x definitions
+    const v2Spec = spec as OpenAPIV2.Document;
+    if (v2Spec.definitions) {
+      result.schemas = {};
+      for (const [name, schema] of Object.entries(v2Spec.definitions)) {
+        result.schemas[name] = this.extractSchema(schema, spec) || {};
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
   }
 
   async updateEndpointOverview(
@@ -747,21 +798,21 @@ export class OpenApiService {
         return { success: false, message: `Path ${oldPath} not found in spec` };
       }
 
-      // Check if new path already exists (and is different from old)
-      if (oldPath !== newPath && spec.paths[newPath]) {
-        return { success: false, message: `Path ${newPath} already exists in spec` };
-      }
-
       // Get the path object
       const pathObj = spec.paths[oldPath];
 
-      // Check if the method exists
+      // Check if the method exists on old path
       if (!pathObj[method.toLowerCase()]) {
         return { success: false, message: `Method ${method} not found for path ${oldPath}` };
       }
 
-      // If path is changing, we need to move the entire path object or just the method
+      // If path is changing, validate Method+Path uniqueness
       if (oldPath !== newPath) {
+        // Check if the new path already has this method (Method+Path must be unique)
+        if (spec.paths[newPath] && spec.paths[newPath][method.toLowerCase()]) {
+          return { success: false, message: `${method.toUpperCase()} ${newPath} already exists in spec` };
+        }
+
         // Create new path if it doesn't exist
         if (!spec.paths[newPath]) {
           spec.paths[newPath] = {};

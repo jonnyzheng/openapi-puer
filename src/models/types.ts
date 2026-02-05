@@ -9,6 +9,7 @@ export interface ApiFile {
   title?: string;
   description?: string;
   servers?: ServerInfo[];
+  components?: Record<string, Record<string, SchemaObject>>;
 }
 
 export interface ServerInfo {
