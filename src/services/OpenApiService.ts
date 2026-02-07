@@ -49,6 +49,9 @@ export class OpenApiService {
       }
 
       if (!this.isOpenApiSpec(parsed)) {
+        if (this.isSchemaFile(parsed)) {
+          return this.parseSchemaFile(filePath, parsed as Record<string, unknown>, stat.mtimeMs);
+        }
         return null;
       }
 
@@ -75,6 +78,66 @@ export class OpenApiService {
       this.outputChannel.appendLine(`Error parsing ${filePath}: ${message}`);
       return null;
     }
+  }
+
+  private parseSchemaFile(filePath: string, parsed: Record<string, unknown>, mtimeMs: number): ApiFile {
+    const components = parsed.components as Record<string, Record<string, unknown>>;
+    const schemas: Record<string, SchemaObject> = {};
+
+    if (components.schemas) {
+      for (const [name, schema] of Object.entries(components.schemas)) {
+        schemas[name] = this.extractSchemaFromRaw(schema as Record<string, unknown>);
+      }
+    }
+
+    const apiFile: ApiFile = {
+      filePath,
+      fileName: path.basename(filePath),
+      spec: parsed as unknown as OpenAPI.Document,
+      version: '3.0',
+      title: path.basename(filePath, '.json'),
+      description: undefined,
+      servers: [],
+      endpoints: [],
+      components: { schemas }
+    };
+
+    this.cache.set(filePath, { mtime: mtimeMs, apiFile });
+    return apiFile;
+  }
+
+  private extractSchemaFromRaw(schema: Record<string, unknown>): SchemaObject {
+    const result: SchemaObject = {
+      type: schema.type as string | undefined,
+      format: schema.format as string | undefined,
+      description: schema.description as string | undefined,
+      example: schema.example,
+      default: schema.default,
+      nullable: schema.nullable as boolean | undefined,
+      enum: schema.enum as unknown[] | undefined,
+    };
+
+    if (schema.required && Array.isArray(schema.required)) {
+      result.required = schema.required as string[];
+    }
+
+    if (schema.properties && typeof schema.properties === 'object') {
+      result.properties = {};
+      for (const [key, value] of Object.entries(schema.properties as Record<string, unknown>)) {
+        result.properties[key] = this.extractSchemaFromRaw(value as Record<string, unknown>);
+      }
+    }
+
+    if (schema.items && typeof schema.items === 'object') {
+      result.items = this.extractSchemaFromRaw(schema.items as Record<string, unknown>);
+    }
+
+    if (schema.$ref) {
+      const refParts = (schema.$ref as string).split('/');
+      result.$ref = refParts[refParts.length - 1];
+    }
+
+    return result;
   }
 
   async scanDirectory(dirPath: string): Promise<ApiFile[]> {
@@ -364,6 +427,14 @@ export class OpenApiService {
     if (!obj || typeof obj !== 'object') return false;
     const spec = obj as Record<string, unknown>;
     return 'swagger' in spec || 'openapi' in spec;
+  }
+
+  private isSchemaFile(obj: unknown): boolean {
+    if (!obj || typeof obj !== 'object') return false;
+    const spec = obj as Record<string, unknown>;
+    if ('swagger' in spec || 'openapi' in spec) return false;
+    const components = spec.components as Record<string, unknown> | undefined;
+    return !!(components && typeof components === 'object' && components.schemas);
   }
 
   private getSpecVersion(spec: OpenAPI.Document): '2.0' | '3.0' | '3.1' {
@@ -845,12 +916,605 @@ export class OpenApiService {
     }
   }
 
+  async addServer(
+    filePath: string,
+    server: { url: string; description?: string }
+  ): Promise<{ success: boolean; message?: string; servers?: { url: string; description?: string }[] }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      // Initialize servers array if it doesn't exist
+      if (!spec.servers) {
+        spec.servers = [];
+      }
+
+      // Check for duplicate URL
+      const exists = spec.servers.some((s: { url: string }) => s.url === server.url);
+      if (exists) {
+        return { success: false, message: `Server with URL ${server.url} already exists` };
+      }
+
+      // Add the new server
+      const newServer: { url: string; description?: string } = { url: server.url };
+      if (server.description) {
+        newServer.description = server.description;
+      }
+      spec.servers.push(newServer);
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true, servers: spec.servers };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error adding server: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async updateServer(
+    filePath: string,
+    index: number,
+    server: { url: string; description?: string }
+  ): Promise<{ success: boolean; message?: string; servers?: { url: string; description?: string }[] }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      if (!spec.servers || index < 0 || index >= spec.servers.length) {
+        return { success: false, message: `Server at index ${index} not found` };
+      }
+
+      // Check for duplicate URL (excluding current server)
+      const duplicateIndex = spec.servers.findIndex(
+        (s: { url: string }, i: number) => s.url === server.url && i !== index
+      );
+      if (duplicateIndex !== -1) {
+        return { success: false, message: `Server with URL ${server.url} already exists` };
+      }
+
+      // Update the server
+      spec.servers[index] = { url: server.url };
+      if (server.description) {
+        spec.servers[index].description = server.description;
+      }
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true, servers: spec.servers };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating server: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async deleteServer(
+    filePath: string,
+    index: number
+  ): Promise<{ success: boolean; message?: string; servers?: { url: string; description?: string }[] }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      if (!spec.servers || index < 0 || index >= spec.servers.length) {
+        return { success: false, message: `Server at index ${index} not found` };
+      }
+
+      // Remove the server
+      spec.servers.splice(index, 1);
+
+      // If servers array is empty, remove it
+      if (spec.servers.length === 0) {
+        delete spec.servers;
+      }
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true, servers: spec.servers || [] };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error deleting server: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async updateApiInfo(
+    filePath: string,
+    updates: { title?: string; description?: string; version?: string }
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      if (!spec.info) {
+        spec.info = {};
+      }
+
+      if (updates.title !== undefined) {
+        spec.info.title = updates.title || undefined;
+      }
+      if (updates.description !== undefined) {
+        spec.info.description = updates.description || undefined;
+      }
+      if (updates.version !== undefined) {
+        spec.info.version = updates.version || undefined;
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating API info: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async addEndpoint(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    summary?: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      // Initialize paths object if it doesn't exist
+      if (!spec.paths) {
+        spec.paths = {};
+      }
+
+      // Initialize path object if it doesn't exist
+      if (!spec.paths[endpointPath]) {
+        spec.paths[endpointPath] = {};
+      }
+
+      // Check if method already exists for this path
+      if (spec.paths[endpointPath][method.toLowerCase()]) {
+        return { success: false, message: `${method.toUpperCase()} ${endpointPath} already exists` };
+      }
+
+      // Create the new endpoint operation
+      const operation: Record<string, unknown> = {
+        responses: {
+          '200': {
+            description: 'Successful response'
+          }
+        }
+      };
+
+      if (summary) {
+        operation.summary = summary;
+      }
+
+      // Add the endpoint
+      spec.paths[endpointPath][method.toLowerCase()] = operation;
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error adding endpoint: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async addModel(
+    filePath: string,
+    modelName: string,
+    modelType: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      // Determine if this is OpenAPI 3.x, 2.x, or schema-only file
+      const isV3 = spec.openapi !== undefined;
+      const isSchemaOnly = !spec.openapi && !spec.swagger && spec.components?.schemas;
+
+      if (isV3 || isSchemaOnly) {
+        // OpenAPI 3.x uses components.schemas
+        if (!spec.components) {
+          spec.components = {};
+        }
+        if (!spec.components.schemas) {
+          spec.components.schemas = {};
+        }
+
+        // Check if model already exists
+        if (spec.components.schemas[modelName]) {
+          return { success: false, message: `Model "${modelName}" already exists` };
+        }
+
+        // Create the model schema based on type
+        const schema = this.createModelSchema(modelType);
+        spec.components.schemas[modelName] = schema;
+      } else {
+        // OpenAPI 2.x uses definitions
+        if (!spec.definitions) {
+          spec.definitions = {};
+        }
+
+        // Check if model already exists
+        if (spec.definitions[modelName]) {
+          return { success: false, message: `Model "${modelName}" already exists` };
+        }
+
+        // Create the model schema based on type
+        const schema = this.createModelSchema(modelType);
+        spec.definitions[modelName] = schema;
+      }
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error adding model: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  private createModelSchema(modelType: string): Record<string, unknown> {
+    switch (modelType) {
+      case 'object':
+        return {
+          type: 'object',
+          properties: {},
+          required: []
+        };
+      case 'array':
+        return {
+          type: 'array',
+          items: {
+            type: 'object'
+          }
+        };
+      case 'string':
+        return {
+          type: 'string'
+        };
+      case 'integer':
+        return {
+          type: 'integer'
+        };
+      case 'number':
+        return {
+          type: 'number'
+        };
+      case 'boolean':
+        return {
+          type: 'boolean'
+        };
+      default:
+        return {
+          type: 'object',
+          properties: {}
+        };
+    }
+  }
+
+  private getSchemasObject(spec: Record<string, unknown>): Record<string, unknown> | null {
+    if (spec.openapi) {
+      return (spec as Record<string, Record<string, Record<string, unknown>>>).components?.schemas || null;
+    } else if (spec.swagger) {
+      return (spec as Record<string, Record<string, unknown>>).definitions || null;
+    } else if ((spec.components as Record<string, unknown>)?.schemas) {
+      return (spec.components as Record<string, Record<string, unknown>>).schemas;
+    }
+    return null;
+  }
+
+  async deleteSchema(
+    filePath: string,
+    schemaName: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas || !schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      delete schemas[schemaName];
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error deleting schema: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async addSchemaProperty(
+    filePath: string,
+    schemaName: string,
+    property: { name: string; type: string; description?: string; required?: boolean }
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas || !schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      const schema = schemas[schemaName] as Record<string, unknown>;
+      if (!schema.properties) {
+        schema.properties = {};
+      }
+
+      const props = schema.properties as Record<string, unknown>;
+      if (props[property.name]) {
+        return { success: false, message: `Property "${property.name}" already exists` };
+      }
+
+      const propDef: Record<string, unknown> = { type: property.type };
+      if (property.description) {
+        propDef.description = property.description;
+      }
+      props[property.name] = propDef;
+
+      if (property.required) {
+        if (!Array.isArray(schema.required)) {
+          schema.required = [];
+        }
+        (schema.required as string[]).push(property.name);
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error adding property: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async deleteSchemaProperty(
+    filePath: string,
+    schemaName: string,
+    propertyName: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas || !schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      const schema = schemas[schemaName] as Record<string, unknown>;
+      const props = schema.properties as Record<string, unknown> | undefined;
+      if (!props || !props[propertyName]) {
+        return { success: false, message: `Property "${propertyName}" not found` };
+      }
+
+      delete props[propertyName];
+
+      // Remove from required array if present
+      if (Array.isArray(schema.required)) {
+        schema.required = (schema.required as string[]).filter(r => r !== propertyName);
+        if ((schema.required as string[]).length === 0) {
+          schema.required = [];
+        }
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error deleting property: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async updateSchemaProperty(
+    filePath: string,
+    schemaName: string,
+    propertyName: string,
+    updates: { name?: string; type?: string; description?: string; required?: boolean }
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas || !schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      const schema = schemas[schemaName] as Record<string, unknown>;
+      const props = schema.properties as Record<string, unknown> | undefined;
+      if (!props || !props[propertyName]) {
+        return { success: false, message: `Property "${propertyName}" not found` };
+      }
+
+      const propDef = props[propertyName] as Record<string, unknown>;
+
+      // Update type
+      if (updates.type !== undefined) {
+        propDef.type = updates.type;
+      }
+
+      // Update description
+      if (updates.description !== undefined) {
+        if (updates.description) {
+          propDef.description = updates.description;
+        } else {
+          delete propDef.description;
+        }
+      }
+
+      // Handle rename
+      if (updates.name && updates.name !== propertyName) {
+        if (props[updates.name]) {
+          return { success: false, message: `Property "${updates.name}" already exists` };
+        }
+        // Preserve key order by rebuilding
+        const newProps: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(props)) {
+          if (key === propertyName) {
+            newProps[updates.name] = value;
+          } else {
+            newProps[key] = value;
+          }
+        }
+        schema.properties = newProps;
+
+        // Update required array
+        if (Array.isArray(schema.required)) {
+          schema.required = (schema.required as string[]).map(r => r === propertyName ? updates.name! : r);
+        }
+      }
+
+      // Update required status
+      if (updates.required !== undefined) {
+        if (!Array.isArray(schema.required)) {
+          schema.required = [];
+        }
+        const reqArr = schema.required as string[];
+        const propName = updates.name || propertyName;
+        const idx = reqArr.indexOf(propName);
+        if (updates.required && idx === -1) {
+          reqArr.push(propName);
+        } else if (!updates.required && idx !== -1) {
+          reqArr.splice(idx, 1);
+        }
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating property: ${message}`);
+      return { success: false, message };
+    }
+  }
+
   clearCache(): void {
     this.cache.clear();
   }
 
   removeFromCache(filePath: string): void {
     this.cache.delete(filePath);
+  }
+
+  async createFolder(parentPath: string, folderName: string): Promise<{ success: boolean; path?: string; message?: string }> {
+    try {
+      const newFolderPath = path.join(parentPath, folderName);
+
+      if (fs.existsSync(newFolderPath)) {
+        return { success: false, message: `Folder "${folderName}" already exists` };
+      }
+
+      await fs.promises.mkdir(newFolderPath, { recursive: true });
+
+      return { success: true, path: newFolderPath };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error creating folder: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async createFile(parentPath: string, fileName: string): Promise<{ success: boolean; path?: string; message?: string }> {
+    try {
+      // Ensure the file has .json extension
+      const finalFileName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+      const newFilePath = path.join(parentPath, finalFileName);
+
+      if (fs.existsSync(newFilePath)) {
+        return { success: false, message: `File "${finalFileName}" already exists` };
+      }
+
+      // Create a basic OpenAPI 3.0 template
+      const template = {
+        openapi: "3.0.3",
+        info: {
+          title: fileName.replace(/\.json$/, ''),
+          version: "1.0.0",
+          description: ""
+        },
+        servers: [],
+        paths: {}
+      };
+
+      await fs.promises.writeFile(newFilePath, JSON.stringify(template, null, 2), 'utf-8');
+
+      return { success: true, path: newFilePath };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error creating file: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async deleteItem(itemPath: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      if (!fs.existsSync(itemPath)) {
+        return { success: false, message: `Item not found: ${itemPath}` };
+      }
+
+      const stat = fs.statSync(itemPath);
+
+      if (stat.isDirectory()) {
+        await fs.promises.rm(itemPath, { recursive: true, force: true });
+      } else {
+        await fs.promises.unlink(itemPath);
+        // Remove from cache if it's a file
+        this.removeFromCache(itemPath);
+      }
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error deleting item: ${message}`);
+      return { success: false, message };
+    }
   }
 
   dispose(): void {

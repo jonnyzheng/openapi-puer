@@ -89,24 +89,143 @@
         "title": "Set API Folder",
         "category": "SuperAPI",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "superapi.addFolder",
+        "title": "Add Folder",
+        "category": "SuperAPI",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "superapi.addFile",
+        "title": "Add File",
+        "category": "SuperAPI",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "superapi.deleteItem",
+        "title": "Delete",
+        "category": "SuperAPI",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "superapi.viewSourceCode",
+        "title": "View Source Code",
+        "category": "SuperAPI",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "superapi.addEndpoint",
+        "title": "Add Endpoint",
+        "category": "SuperAPI",
+        "icon": "$(add)"
+      },
+      {
+        "command": "superapi.addModel",
+        "title": "Add Model",
+        "category": "SuperAPI",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "superapi.addServer",
+        "title": "Add Server",
+        "category": "SuperAPI",
+        "icon": "$(server)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "superapi.addFolder",
+          "when": "view == superapi.apiExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "superapi.addFile",
+          "when": "view == superapi.apiExplorer",
+          "group": "navigation@2"
+        },
+        {
           "command": "superapi.refresh",
           "when": "view == superapi.apiExplorer",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "superapi.toggleGroupByTags",
           "when": "view == superapi.apiExplorer",
-          "group": "navigation"
+          "group": "navigation@4"
         },
         {
           "command": "superapi.setApiFolder",
           "when": "view == superapi.apiExplorer",
-          "group": "navigation"
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "superapi.addFolder",
+          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "group": "1_add@1"
+        },
+        {
+          "command": "superapi.addFile",
+          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "group": "1_add@2"
+        },
+        {
+          "command": "superapi.deleteItem",
+          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "group": "2_delete"
+        },
+        {
+          "command": "superapi.deleteItem",
+          "when": "view == superapi.apiExplorer && viewItem == file",
+          "group": "2_delete"
+        },
+        {
+          "command": "superapi.viewSourceCode",
+          "when": "view == superapi.apiExplorer && viewItem == file",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "superapi.addEndpoint",
+          "when": "view == superapi.apiExplorer && viewItem == file",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "superapi.addModel",
+          "when": "view == superapi.apiExplorer && viewItem == file",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "superapi.addServer",
+          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "group": "1_actions@4"
+        },
+        {
+          "command": "superapi.viewSourceCode",
+          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "superapi.deleteItem",
+          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "group": "2_delete"
+        },
+        {
+          "command": "superapi.viewSourceCode",
+          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "superapi.addModel",
+          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "superapi.deleteItem",
+          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "group": "2_delete"
         }
       ]
     },
@@ -127,19 +246,19 @@
   },
   "packageManager": "pnpm@9.0.0",
   "dependencies": {
-    "@apidevtools/swagger-parser": "^10.1.0",
+    "@apidevtools/swagger-parser": "^10.1.1",
     "@vscode/webview-ui-toolkit": "^1.4.0",
-    "axios": "^1.6.0"
+    "axios": "^1.13.4"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "~20.19.31",
+    "@types/vscode": "^1.108.1",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.8"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^8.57.1",
+    "typescript": "^5.9.3"
   }
 }

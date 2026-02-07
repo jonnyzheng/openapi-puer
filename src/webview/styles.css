@@ -214,11 +214,12 @@ body {
 .meta-value {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 2px 8px;
   border-radius: 4px;
-  min-height: 20px;
+  min-height: 24px;
   line-height: 1.4;
   word-break: break-word;
+  box-sizing: border-box;
 }
 
 .meta-value.editable {
@@ -243,7 +244,7 @@ body {
 .inline-edit-input {
   width: 100%;
   min-width: 300px;
-  padding: 6px 8px;
+  padding: 2px 8px;
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-focusBorder);
@@ -251,6 +252,9 @@ body {
   font-family: var(--vscode-font-family);
   font-size: 13px;
   outline: none;
+  box-sizing: border-box;
+  height: 24px;
+  line-height: 1.4;
 }
 
 .inline-edit-input::placeholder {
@@ -452,6 +456,27 @@ textarea.inline-edit-input {
   min-width: 80px;
   padding: 2px 6px;
   font-size: 12px;
+  height: auto;
+  line-height: 1.4;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.component-props-table .editable-cell .inline-edit-input,
+.component-props-table .editable-cell select {
+  width: 100%;
+  min-width: 60px;
+  padding: 1px 4px;
+  font-size: 12px;
+  height: 20px;
+  line-height: 1.4;
+  min-height: 0;
+  box-sizing: border-box;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 3px;
+  outline: none;
 }
 
 .inline-edit-select {
@@ -1192,4 +1217,516 @@ input[type="text"]:focus, textarea:focus {
   padding: 2px 6px;
   border-radius: 3px;
   margin: 0 2px;
+}
+
+/* Servers tab styles */
+#servers-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.server-card {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.server-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.server-index {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-badge-background);
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.server-url {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  flex: 1;
+  word-break: break-all;
+}
+
+.server-copy-btn,
+.server-use-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.server-copy-btn:hover,
+.server-use-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.server-use-btn {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.server-use-btn:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.server-description {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Server header with action button */
+.section-header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header-with-action .section-header {
+  margin: 0;
+}
+
+.add-server-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.add-server-btn:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.server-buttons {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.server-edit-btn,
+.server-delete-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.server-edit-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.server-delete-btn {
+  background-color: transparent;
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+.server-delete-btn:hover {
+  background-color: rgba(241, 76, 76, 0.2);
+}
+
+.empty-message {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+/* Server dialog styles */
+.server-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.server-dialog {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.server-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.server-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.server-form label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.server-input {
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  outline: none;
+}
+
+.server-input:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.server-input.error {
+  border-color: var(--vscode-errorForeground);
+}
+
+.server-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.server-dialog-cancel,
+.server-dialog-save,
+.server-dialog-delete {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--vscode-button-border, transparent);
+}
+
+.server-dialog-cancel {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.server-dialog-cancel:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.server-dialog-save {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.server-dialog-save:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.server-dialog-delete {
+  background-color: var(--vscode-errorForeground);
+  color: white;
+  border: none;
+}
+
+.server-dialog-delete:hover {
+  opacity: 0.9;
+}
+
+.server-delete-message {
+  margin: 0 0 20px 0;
+  line-height: 1.6;
+}
+
+.server-delete-message code {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: var(--vscode-textCodeBlock-background);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Server Management View */
+.server-management-view {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.server-management-header {
+  margin-bottom: 24px;
+}
+
+.server-management-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.server-management-subtitle {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+}
+
+.servers-list-container {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.servers-list-container .section-header-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.servers-list-container .section-header {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#server-list-content .server-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+}
+
+#server-list-content .server-item:last-child {
+  margin-bottom: 0;
+}
+
+#server-list-content .server-item:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+#server-list-content .server-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#server-list-content .server-url {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 13px;
+  color: var(--vscode-textLink-foreground);
+  word-break: break-all;
+}
+
+#server-list-content .server-description {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+#server-list-content .server-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state-hint {
+  margin-top: 8px !important;
+  font-size: 12px;
+}
+
+/* API File View */
+.method-badge.api-badge {
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.method-badge.schema-badge {
+  background-color: #9012fe;
+  color: #fff;
+}
+
+.schema-header-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.schema-action-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.schema-action-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.schema-action-btn.add {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.schema-action-btn.add:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.schema-action-btn.delete {
+  color: #f93e3e;
+}
+
+.schema-action-btn.delete:hover {
+  background-color: rgba(249, 62, 62, 0.15);
+}
+
+.schema-action-btn.delete.small {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: none;
+  background: none;
+}
+
+.schema-action-btn.delete.small:hover {
+  background-color: rgba(249, 62, 62, 0.15);
+}
+
+.editable-cell {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.15s;
+  display: inline-block;
+  line-height: 1.4;
+  min-height: 20px;
+}
+
+.editable-cell:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.editable-cell.empty {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.schema-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.empty-message {
+  padding: 16px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  text-align: center;
+}
+
+.api-info-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.api-info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.api-info-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.api-info-input {
+  padding: 6px 10px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--vscode-font-family);
+}
+
+.api-info-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.api-info-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.api-info-textarea {
+  padding: 6px 10px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--vscode-font-family);
+  resize: vertical;
+}
+
+.api-info-textarea:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
 }

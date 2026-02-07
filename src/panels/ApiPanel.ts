@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage, SchemaObject } from '../models/types';
+import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage, SchemaObject, ServerInfo } from '../models/types';
 
 export class ApiPanel {
   public static currentPanel: ApiPanel | undefined;
@@ -72,6 +72,70 @@ export class ApiPanel {
     method: string;
   }>();
   readonly onUpdatePath = this.onUpdatePathEmitter.event;
+
+  private onAddServerEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    server: { url: string; description?: string };
+  }>();
+  readonly onAddServer = this.onAddServerEmitter.event;
+
+  private onUpdateServerEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    index: number;
+    server: { url: string; description?: string };
+  }>();
+  readonly onUpdateServer = this.onUpdateServerEmitter.event;
+
+  private onDeleteServerEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    index: number;
+  }>();
+  readonly onDeleteServer = this.onDeleteServerEmitter.event;
+
+  private onUpdateApiInfoEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    updates: {
+      title?: string;
+      description?: string;
+      version?: string;
+    };
+  }>();
+  readonly onUpdateApiInfo = this.onUpdateApiInfoEmitter.event;
+
+  private onAddSchemaEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    schemaType: string;
+  }>();
+  readonly onAddSchema = this.onAddSchemaEmitter.event;
+
+  private onDeleteSchemaEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+  }>();
+  readonly onDeleteSchema = this.onDeleteSchemaEmitter.event;
+
+  private onAddSchemaPropertyEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    property: { name: string; type: string; description?: string; required?: boolean };
+  }>();
+  readonly onAddSchemaProperty = this.onAddSchemaPropertyEmitter.event;
+
+  private onDeleteSchemaPropertyEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    propertyName: string;
+  }>();
+  readonly onDeleteSchemaProperty = this.onDeleteSchemaPropertyEmitter.event;
+
+  private onUpdateSchemaPropertyEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    propertyName: string;
+    updates: { name?: string; type?: string; description?: string; required?: boolean };
+  }>();
+  readonly onUpdateSchemaProperty = this.onUpdateSchemaPropertyEmitter.event;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -165,6 +229,44 @@ export class ApiPanel {
     });
   }
 
+  public showAddServerDialog(
+    filePath: string,
+    servers: { url: string; description?: string }[]
+  ): void {
+    this.panel.title = 'Add Server';
+    this.postMessage({
+      type: 'showAddServer',
+      payload: { filePath, servers }
+    });
+  }
+
+  public showApiFile(apiFile: {
+    filePath: string;
+    title?: string;
+    description?: string;
+    version: string;
+    infoVersion?: string;
+    servers: ServerInfo[];
+  }): void {
+    this.panel.title = apiFile.title || 'API Info';
+    this.postMessage({
+      type: 'showApiFile',
+      payload: apiFile
+    });
+  }
+
+  public showSchemaFile(schemaFile: {
+    filePath: string;
+    title?: string;
+    components: Record<string, Record<string, SchemaObject>>;
+  }): void {
+    this.panel.title = schemaFile.title || 'Schemas';
+    this.postMessage({
+      type: 'showSchemaFile',
+      payload: schemaFile
+    });
+  }
+
   private handleMessage(message: WebviewMessage): void {
     switch (message.type) {
       case 'sendRequest':
@@ -227,6 +329,70 @@ export class ApiPanel {
           method: string;
         });
         break;
+      case 'addServer':
+        this.onAddServerEmitter.fire(message.payload as {
+          filePath: string;
+          server: { url: string; description?: string };
+        });
+        break;
+      case 'updateServer':
+        this.onUpdateServerEmitter.fire(message.payload as {
+          filePath: string;
+          index: number;
+          server: { url: string; description?: string };
+        });
+        break;
+      case 'deleteServer':
+        this.onDeleteServerEmitter.fire(message.payload as {
+          filePath: string;
+          index: number;
+        });
+        break;
+      case 'updateApiInfo':
+        this.onUpdateApiInfoEmitter.fire(message.payload as {
+          filePath: string;
+          updates: {
+            title?: string;
+            description?: string;
+            version?: string;
+          };
+        });
+        break;
+      case 'addSchema':
+        this.onAddSchemaEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          schemaType: string;
+        });
+        break;
+      case 'deleteSchema':
+        this.onDeleteSchemaEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+        });
+        break;
+      case 'addSchemaProperty':
+        this.onAddSchemaPropertyEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          property: { name: string; type: string; description?: string; required?: boolean };
+        });
+        break;
+      case 'deleteSchemaProperty':
+        this.onDeleteSchemaPropertyEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          propertyName: string;
+        });
+        break;
+      case 'updateSchemaProperty':
+        this.onUpdateSchemaPropertyEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          propertyName: string;
+          updates: { name?: string; type?: string; description?: string; required?: boolean };
+        });
+        break;
       case 'ready':
         // Webview is ready
         break;
@@ -240,6 +406,20 @@ export class ApiPanel {
     });
   }
 
+  public updateServers(servers: { url: string; description?: string }[]): void {
+    this.postMessage({
+      type: 'updateServers',
+      payload: { servers }
+    });
+  }
+
+  public updateSchemas(components: Record<string, Record<string, SchemaObject>>): void {
+    this.postMessage({
+      type: 'updateSchemas',
+      payload: { components }
+    });
+  }
+
   private postMessage(message: WebviewMessage): void {
     this.panel.webview.postMessage(message);
   }
@@ -249,6 +429,21 @@ export class ApiPanel {
 
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'styles.css')
+    );
+    const utilsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'utils.js')
+    );
+    const detailsTabUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'detailsTab.js')
+    );
+    const requestTabUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'requestTab.js')
+    );
+    const componentsTabUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'componentsTab.js')
+    );
+    const serversTabUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'serversTab.js')
     );
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'main.js')
@@ -282,6 +477,7 @@ export class ApiPanel {
     <div id="main-tabs">
       <button class="main-tab-btn active" data-main-tab="details">Details</button>
       <button class="main-tab-btn" data-main-tab="components" id="components-tab-btn" style="display: none;">Components</button>
+      <button class="main-tab-btn" data-main-tab="servers" id="servers-tab-btn" style="display: none;">Servers</button>
       <button class="main-tab-btn" data-main-tab="request">Request</button>
     </div>
 
@@ -312,6 +508,10 @@ export class ApiPanel {
 
       <div id="components-tab" class="main-tab-content">
         <div id="components-content"></div>
+      </div>
+
+      <div id="servers-tab" class="main-tab-content">
+        <div id="servers-content"></div>
       </div>
 
       <div id="request-tab" class="main-tab-content">
@@ -415,6 +615,11 @@ export class ApiPanel {
     </div>
   </div>
 
+  <script nonce="${nonce}" src="${utilsUri}"></script>
+  <script nonce="${nonce}" src="${detailsTabUri}"></script>
+  <script nonce="${nonce}" src="${requestTabUri}"></script>
+  <script nonce="${nonce}" src="${componentsTabUri}"></script>
+  <script nonce="${nonce}" src="${serversTabUri}"></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -450,6 +655,9 @@ export class ApiPanel {
     this.onAddParameterEmitter.dispose();
     this.onDeleteParameterEmitter.dispose();
     this.onUpdatePathEmitter.dispose();
+    this.onAddServerEmitter.dispose();
+    this.onUpdateServerEmitter.dispose();
+    this.onDeleteServerEmitter.dispose();
     this.onDisposeEmitter.dispose();
   }
 }

@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { OpenApiService } from './services/OpenApiService';
 import { ConfigService } from './services/ConfigService';
 import { HttpService } from './services/HttpService';
 import { EnvironmentService } from './services/EnvironmentService';
-import { ApiTreeProvider } from './providers/ApiTreeProvider';
+import { ApiTreeProvider, ApiTreeItem, ApiTreeDragAndDropController, SUPERAPI_TREE_MIME_TYPE } from './providers/ApiTreeProvider';
 import { ApiPanel } from './panels/ApiPanel';
 import { ApiEndpoint, ApiFile } from './models/types';
 
@@ -26,10 +27,18 @@ export function activate(context: vscode.ExtensionContext) {
   environmentService = new EnvironmentService(context);
   treeProvider = new ApiTreeProvider();
 
+  // Create drag and drop controller
+  const dragAndDropController = new ApiTreeDragAndDropController();
+  dragAndDropController.setOnDidMoveFile(async (sourcePath, targetPath) => {
+    openApiService.removeFromCache(sourcePath);
+    await refreshApiFiles();
+  });
+
   // Register tree view
   const treeView = vscode.window.createTreeView('superapi.apiExplorer', {
     treeDataProvider: treeProvider,
-    showCollapseAll: true
+    showCollapseAll: true,
+    dragAndDropController: dragAndDropController
   });
 
   // Create status bar item for active environment
@@ -184,6 +193,330 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const addFolderCommand = vscode.commands.registerCommand('superapi.addFolder', async (item?: ApiTreeItem) => {
+    const apiDirectory = configService.getApiDirectory();
+    if (!apiDirectory) {
+      vscode.window.showErrorMessage('Please set an API folder first');
+      return;
+    }
+
+    // Determine parent path
+    let parentPath: string;
+    if (item && item.itemType === 'folder' && item.folderPath) {
+      parentPath = item.folderPath;
+    } else {
+      parentPath = apiDirectory;
+    }
+
+    const folderName = await vscode.window.showInputBox({
+      prompt: 'Enter folder name',
+      placeHolder: 'e.g., users, orders, auth',
+      validateInput: (value) => {
+        if (!value || value.trim() === '') {
+          return 'Folder name is required';
+        }
+        if (/[<>:"/\\|?*]/.test(value)) {
+          return 'Folder name contains invalid characters';
+        }
+        return undefined;
+      }
+    });
+
+    if (folderName) {
+      const result = await openApiService.createFolder(parentPath, folderName.trim());
+      if (result.success) {
+        vscode.window.showInformationMessage(`Folder "${folderName}" created`);
+        await refreshApiFiles();
+      } else {
+        vscode.window.showErrorMessage(result.message || 'Failed to create folder');
+      }
+    }
+  });
+
+  const addFileCommand = vscode.commands.registerCommand('superapi.addFile', async (item?: ApiTreeItem) => {
+    const apiDirectory = configService.getApiDirectory();
+    if (!apiDirectory) {
+      vscode.window.showErrorMessage('Please set an API folder first');
+      return;
+    }
+
+    // Determine parent path
+    let parentPath: string;
+    if (item && item.itemType === 'folder' && item.folderPath) {
+      parentPath = item.folderPath;
+    } else {
+      parentPath = apiDirectory;
+    }
+
+    const fileName = await vscode.window.showInputBox({
+      prompt: 'Enter file name',
+      placeHolder: 'e.g., users-api, orders, auth (will add .json extension)',
+      validateInput: (value) => {
+        if (!value || value.trim() === '') {
+          return 'File name is required';
+        }
+        if (/[<>:"/\\|?*]/.test(value)) {
+          return 'File name contains invalid characters';
+        }
+        return undefined;
+      }
+    });
+
+    if (fileName) {
+      const result = await openApiService.createFile(parentPath, fileName.trim());
+      if (result.success) {
+        vscode.window.showInformationMessage(`File "${fileName}.json" created`);
+        await refreshApiFiles();
+
+        // Open the newly created file in editor
+        if (result.path) {
+          const doc = await vscode.workspace.openTextDocument(result.path);
+          await vscode.window.showTextDocument(doc);
+        }
+      } else {
+        vscode.window.showErrorMessage(result.message || 'Failed to create file');
+      }
+    }
+  });
+
+  const deleteItemCommand = vscode.commands.registerCommand('superapi.deleteItem', async (item?: ApiTreeItem) => {
+    if (!item) {
+      return;
+    }
+
+    let itemPath: string | undefined;
+    let itemName: string = '';
+    let itemType: string = '';
+
+    if (item.itemType === 'folder' && item.folderPath) {
+      itemPath = item.folderPath;
+      itemName = path.basename(item.folderPath);
+      itemType = 'folder';
+    } else if (item.itemType === 'file' && item.apiFile) {
+      itemPath = item.apiFile.filePath;
+      itemName = item.apiFile.fileName;
+      itemType = 'file';
+    }
+
+    if (!itemPath) {
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete ${itemType} "${itemName}"?${itemType === 'folder' ? ' This will delete all contents.' : ''}`,
+      { modal: true },
+      'Delete'
+    );
+
+    if (confirm === 'Delete') {
+      const result = await openApiService.deleteItem(itemPath);
+      if (result.success) {
+        vscode.window.showInformationMessage(`${itemType} "${itemName}" deleted`);
+        await refreshApiFiles();
+      } else {
+        vscode.window.showErrorMessage(result.message || `Failed to delete ${itemType}`);
+      }
+    }
+  });
+
+  const viewSourceCodeCommand = vscode.commands.registerCommand('superapi.viewSourceCode', async (item?: ApiTreeItem) => {
+    if (!item || item.itemType !== 'file' || !item.apiFile) {
+      return;
+    }
+
+    const filePath = item.apiFile.filePath;
+    try {
+      const doc = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(doc);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to open file: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+
+  const addEndpointCommand = vscode.commands.registerCommand('superapi.addEndpoint', async (item?: ApiTreeItem) => {
+    if (!item || item.itemType !== 'file' || !item.apiFile) {
+      return;
+    }
+
+    const filePath = item.apiFile.filePath;
+
+    // Get HTTP method
+    const method = await vscode.window.showQuickPick(
+      ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'],
+      { placeHolder: 'Select HTTP method' }
+    );
+
+    if (!method) {
+      return;
+    }
+
+    // Get endpoint path
+    const endpointPath = await vscode.window.showInputBox({
+      prompt: 'Enter endpoint path',
+      placeHolder: 'e.g., /users, /users/{id}, /orders/{orderId}/items',
+      validateInput: (value) => {
+        if (!value || value.trim() === '') {
+          return 'Endpoint path is required';
+        }
+        if (!value.startsWith('/')) {
+          return 'Endpoint path must start with /';
+        }
+        return undefined;
+      }
+    });
+
+    if (!endpointPath) {
+      return;
+    }
+
+    // Get summary (optional)
+    const summary = await vscode.window.showInputBox({
+      prompt: 'Enter endpoint summary (optional)',
+      placeHolder: 'e.g., Get all users, Create a new order'
+    });
+
+    const result = await openApiService.addEndpoint(filePath, endpointPath.trim(), method, summary?.trim());
+    if (result.success) {
+      vscode.window.showInformationMessage(`Endpoint ${method.toUpperCase()} ${endpointPath} added`);
+      await refreshApiFiles();
+    } else {
+      vscode.window.showErrorMessage(result.message || 'Failed to add endpoint');
+    }
+  });
+
+  const addModelCommand = vscode.commands.registerCommand('superapi.addModel', async (item?: ApiTreeItem) => {
+    if (!item || item.itemType !== 'file' || !item.apiFile) {
+      return;
+    }
+
+    const filePath = item.apiFile.filePath;
+
+    // Get model name
+    const modelName = await vscode.window.showInputBox({
+      prompt: 'Enter model name',
+      placeHolder: 'e.g., User, Order, Product',
+      validateInput: (value) => {
+        if (!value || value.trim() === '') {
+          return 'Model name is required';
+        }
+        if (!/^[A-Za-z][A-Za-z0-9]*$/.test(value)) {
+          return 'Model name must start with a letter and contain only letters and numbers';
+        }
+        return undefined;
+      }
+    });
+
+    if (!modelName) {
+      return;
+    }
+
+    // Get model type
+    const modelType = await vscode.window.showQuickPick(
+      [
+        { label: 'object', description: 'An object with properties' },
+        { label: 'string', description: 'A string value' },
+        { label: 'integer', description: 'An integer number' },
+        { label: 'number', description: 'A floating-point number' },
+        { label: 'boolean', description: 'A true/false value' },
+        { label: 'array', description: 'An array of items' }
+      ],
+      { placeHolder: 'Select model type' }
+    );
+
+    if (!modelType) {
+      return;
+    }
+
+    const result = await openApiService.addModel(filePath, modelName.trim(), modelType.label);
+    if (result.success) {
+      vscode.window.showInformationMessage(`Model "${modelName}" added`);
+      await refreshApiFiles();
+
+      // Open the file to show the new model
+      const doc = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(doc);
+    } else {
+      vscode.window.showErrorMessage(result.message || 'Failed to add model');
+    }
+  });
+
+  const addServerCommand = vscode.commands.registerCommand('superapi.addServer', async (item?: ApiTreeItem) => {
+    if (!item || !item.apiFile) {
+      return;
+    }
+
+    const filePath = item.apiFile.filePath;
+
+    // Get the servers from the API file
+    const apiFile = await openApiService.parseFile(filePath);
+    if (!apiFile) {
+      vscode.window.showErrorMessage('Failed to parse API file');
+      return;
+    }
+
+    const servers = apiFile.servers || [];
+
+    // Create or show the panel and display the server management view
+    const panel = ApiPanel.createOrShow(context.extensionUri);
+
+    // Setup event handlers for server operations
+    panel.onAddServer(async (data) => {
+      const result = await openApiService.addServer(data.filePath, data.server);
+      if (result.success) {
+        vscode.window.showInformationMessage('Server added successfully');
+        // Refresh and update the panel
+        const updatedFile = await openApiService.parseFile(data.filePath);
+        if (updatedFile) {
+          panel.showAddServerDialog(data.filePath, updatedFile.servers || []);
+        }
+        await refreshApiFiles();
+      } else {
+        vscode.window.showErrorMessage(result.message || 'Failed to add server');
+      }
+    });
+
+    panel.onUpdateServer(async (data) => {
+      const result = await openApiService.updateServer(data.filePath, data.index, data.server);
+      if (result.success) {
+        vscode.window.showInformationMessage('Server updated successfully');
+        // Refresh and update the panel
+        const updatedFile = await openApiService.parseFile(data.filePath);
+        if (updatedFile) {
+          panel.showAddServerDialog(data.filePath, updatedFile.servers || []);
+        }
+        await refreshApiFiles();
+      } else {
+        vscode.window.showErrorMessage(result.message || 'Failed to update server');
+      }
+    });
+
+    panel.onDeleteServer(async (data) => {
+      const result = await openApiService.deleteServer(data.filePath, data.index);
+      if (result.success) {
+        vscode.window.showInformationMessage('Server deleted successfully');
+        // Refresh and update the panel
+        const updatedFile = await openApiService.parseFile(data.filePath);
+        if (updatedFile) {
+          panel.showAddServerDialog(data.filePath, updatedFile.servers || []);
+        }
+        await refreshApiFiles();
+      } else {
+        vscode.window.showErrorMessage(result.message || 'Failed to delete server');
+      }
+    });
+
+    // Show the server management dialog
+    panel.showAddServerDialog(filePath, servers);
+  });
+
+  const openApiFileCommand = vscode.commands.registerCommand('superapi.openApiFile', (apiFile: ApiFile) => {
+    openApiFilePanel(context, apiFile);
+  });
+
+  const openSchemaFileCommand = vscode.commands.registerCommand('superapi.openSchemaFile', (apiFile: ApiFile) => {
+    openSchemaFilePanel(context, apiFile);
+  });
+
   // Setup file watcher
   const apiDirectory = configService.getApiDirectory();
   if (apiDirectory && configService.validateDirectory(apiDirectory).valid) {
@@ -228,6 +561,15 @@ export function activate(context: vscode.ExtensionContext) {
     selectEnvironmentCommand,
     editEnvironmentCommand,
     setApiFolderCommand,
+    addFolderCommand,
+    addFileCommand,
+    deleteItemCommand,
+    viewSourceCodeCommand,
+    addEndpointCommand,
+    addModelCommand,
+    addServerCommand,
+    openApiFileCommand,
+    openSchemaFileCommand,
     configChangeDisposable,
     { dispose: () => openApiService.dispose() },
     { dispose: () => configService.dispose() },
@@ -379,6 +721,123 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
     }
   });
 
+  // Handle add server
+  panel.onAddServer(async (data) => {
+    const result = await openApiService.addServer(
+      data.filePath,
+      data.server
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle update server
+  panel.onUpdateServer(async (data) => {
+    const result = await openApiService.updateServer(
+      data.filePath,
+      data.index,
+      data.server
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle delete server
+  panel.onDeleteServer(async (data) => {
+    const result = await openApiService.deleteServer(
+      data.filePath,
+      data.index
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      panel.updateServers(result.servers || []);
+      await refreshApiFiles();
+    }
+  });
+
+  // Reset flag when panel is disposed
+  panel.onDispose(() => {
+    panelHandlersRegistered = false;
+  });
+}
+
+function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const panel = ApiPanel.createOrShow(context.extensionUri);
+
+  panel.showApiFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    description: apiFile.description,
+    version: apiFile.version,
+    infoVersion: apiFile.spec?.info?.version,
+    servers: apiFile.servers || []
+  });
+
+  // Only register handlers once
+  if (panelHandlersRegistered) {
+    return;
+  }
+  panelHandlersRegistered = true;
+
+  // Handle update API info
+  panel.onUpdateApiInfo(async (data) => {
+    const result = await openApiService.updateApiInfo(data.filePath, data.updates);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle add server
+  panel.onAddServer(async (data) => {
+    const result = await openApiService.addServer(data.filePath, data.server);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle update server
+  panel.onUpdateServer(async (data) => {
+    const result = await openApiService.updateServer(data.filePath, data.index, data.server);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle delete server
+  panel.onDeleteServer(async (data) => {
+    const result = await openApiService.deleteServer(data.filePath, data.index);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      panel.updateServers(result.servers || []);
+      await refreshApiFiles();
+    }
+  });
+
   // Reset flag when panel is disposed
   panel.onDispose(() => {
     panelHandlersRegistered = false;
@@ -408,4 +867,100 @@ function updatePanelEnvironments(): void {
 
 export function deactivate() {
   // Cleanup is handled by disposables
+}
+
+function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const panel = ApiPanel.createOrShow(context.extensionUri);
+
+  panel.showSchemaFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    components: apiFile.components || {}
+  });
+
+  // Only register handlers once
+  if (panelHandlersRegistered) {
+    return;
+  }
+  panelHandlersRegistered = true;
+
+  // Handle add schema (reuses existing addModel)
+  panel.onAddSchema(async (data) => {
+    const result = await openApiService.addModel(data.filePath, data.schemaName, data.schemaType);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  // Handle delete schema
+  panel.onDeleteSchema(async (data) => {
+    const result = await openApiService.deleteSchema(data.filePath, data.schemaName);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  // Handle add schema property
+  panel.onAddSchemaProperty(async (data) => {
+    const result = await openApiService.addSchemaProperty(data.filePath, data.schemaName, data.property);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  // Handle delete schema property
+  panel.onDeleteSchemaProperty(async (data) => {
+    const result = await openApiService.deleteSchemaProperty(data.filePath, data.schemaName, data.propertyName);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  // Handle update schema property
+  panel.onUpdateSchemaProperty(async (data) => {
+    const result = await openApiService.updateSchemaProperty(data.filePath, data.schemaName, data.propertyName, data.updates);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  // Reset flag when panel is disposed
+  panel.onDispose(() => {
+    panelHandlersRegistered = false;
+  });
 }

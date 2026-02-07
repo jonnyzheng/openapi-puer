@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { ApiFile, ApiEndpoint, HttpMethod } from '../models/types';
 
 export type TreeItemType = 'folder' | 'file' | 'tag' | 'endpoint';
+
+export const SUPERAPI_TREE_MIME_TYPE = 'application/vnd.code.tree.superapi';
 
 interface FolderNode {
   name: string;
@@ -69,7 +72,13 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
   }
 
   private buildFolderTree(): void {
-    if (!this.apiDirectory || this.apiFiles.length === 0) {
+    if (!this.apiDirectory) {
+      this.folderTree = null;
+      return;
+    }
+
+    // Check if directory exists
+    if (!fs.existsSync(this.apiDirectory)) {
       this.folderTree = null;
       return;
     }
@@ -82,29 +91,50 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
       files: []
     };
 
+    // Build folder structure from disk (includes empty folders)
+    this.scanDirectoryForFolders(this.apiDirectory, this.folderTree);
+
+    // Add API files to their respective folders
     for (const file of this.apiFiles) {
       const relativePath = path.relative(this.apiDirectory, file.filePath);
       const parts = relativePath.split(path.sep);
 
       let currentNode = this.folderTree;
 
-      // Navigate/create folder structure
+      // Navigate to the folder containing this file
       for (let i = 0; i < parts.length - 1; i++) {
         const folderName = parts[i];
-        if (!currentNode.children.has(folderName)) {
-          const folderPath = path.join(this.apiDirectory, ...parts.slice(0, i + 1));
-          currentNode.children.set(folderName, {
-            name: folderName,
-            fullPath: folderPath,
-            children: new Map(),
-            files: []
-          });
+        if (currentNode.children.has(folderName)) {
+          currentNode = currentNode.children.get(folderName)!;
         }
-        currentNode = currentNode.children.get(folderName)!;
       }
 
       // Add file to current folder
       currentNode.files.push(file);
+    }
+  }
+
+  private scanDirectoryForFolders(dirPath: string, parentNode: FolderNode): void {
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const fullPath = path.join(dirPath, entry.name);
+          const childNode: FolderNode = {
+            name: entry.name,
+            fullPath: fullPath,
+            children: new Map(),
+            files: []
+          };
+          parentNode.children.set(entry.name, childNode);
+
+          // Recursively scan subdirectories
+          this.scanDirectoryForFolders(fullPath, childNode);
+        }
+      }
+    } catch (error) {
+      // Ignore errors reading directories
     }
   }
 
@@ -142,16 +172,6 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
     // Return empty array when no API folder is configured to show welcome view
     if (!this.apiFolderConfigured) {
       return [];
-    }
-
-    if (this.apiFiles.length === 0) {
-      const emptyItem = new ApiTreeItem(
-        'No OpenAPI files found',
-        vscode.TreeItemCollapsibleState.None,
-        'file'
-      );
-      emptyItem.iconPath = new vscode.ThemeIcon('info');
-      return [emptyItem];
     }
 
     if (!this.folderTree) {
@@ -192,15 +212,33 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
     );
 
     for (const file of sortedFiles) {
+      const isApiJson = file.fileName.toLowerCase() === 'api.json';
+      const isSchemaFile = !isApiJson && file.endpoints.length === 0 && !!file.components;
       const item = new ApiTreeItem(
         file.title || file.fileName,
-        vscode.TreeItemCollapsibleState.Collapsed,
+        (isApiJson || isSchemaFile) ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
         'file',
         file
       );
       item.tooltip = file.description || file.filePath;
-      item.iconPath = new vscode.ThemeIcon('file-code');
+      item.iconPath = new vscode.ThemeIcon(isSchemaFile ? 'symbol-class' : 'file-code');
       item.resourceUri = vscode.Uri.file(file.filePath);
+      // Set special contextValue for api.json files
+      if (isApiJson) {
+        item.contextValue = 'file-api';
+        item.command = {
+          command: 'superapi.openApiFile',
+          title: 'Open API File',
+          arguments: [file]
+        };
+      } else if (isSchemaFile) {
+        item.contextValue = 'file-schema';
+        item.command = {
+          command: 'superapi.openSchemaFile',
+          title: 'Open Schema File',
+          arguments: [file]
+        };
+      }
       items.push(item);
     }
 
@@ -252,7 +290,9 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
   private getEndpointItems(endpoints: ApiEndpoint[]): ApiTreeItem[] {
     return endpoints.map((endpoint) => {
-      const label = `${endpoint.method.toUpperCase()} ${endpoint.path}`;
+      // Use summary or operationId as display name, fallback to path
+      const displayName = endpoint.summary || endpoint.operationId || endpoint.path;
+      const label = `${endpoint.method.toUpperCase()} ${displayName}`;
       const item = new ApiTreeItem(
         label,
         vscode.TreeItemCollapsibleState.None,
@@ -261,7 +301,8 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
         endpoint
       );
 
-      item.tooltip = endpoint.summary || endpoint.description || endpoint.path;
+      // Show path in tooltip
+      item.tooltip = `${endpoint.method.toUpperCase()} ${endpoint.path}${endpoint.description ? '\n\n' + endpoint.description : ''}`;
       item.iconPath = this.getMethodIcon(endpoint.method);
       item.command = {
         command: 'superapi.openEndpoint',
@@ -294,5 +335,105 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
   dispose(): void {
     this._onDidChangeTreeData.dispose();
+  }
+}
+
+export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropController<ApiTreeItem> {
+  readonly dropMimeTypes = [SUPERAPI_TREE_MIME_TYPE];
+  readonly dragMimeTypes = [SUPERAPI_TREE_MIME_TYPE];
+
+  private onDidMoveFile: ((sourcePath: string, targetPath: string) => Promise<void>) | undefined;
+
+  setOnDidMoveFile(callback: (sourcePath: string, targetPath: string) => Promise<void>): void {
+    this.onDidMoveFile = callback;
+  }
+
+  handleDrag(
+    source: readonly ApiTreeItem[],
+    dataTransfer: vscode.DataTransfer,
+    _token: vscode.CancellationToken
+  ): void | Thenable<void> {
+    // Only allow dragging files
+    const draggableItems = source.filter(item => item.itemType === 'file' && item.apiFile);
+
+    if (draggableItems.length > 0) {
+      const dragData = draggableItems.map(item => ({
+        type: item.itemType,
+        filePath: item.apiFile?.filePath
+      }));
+      dataTransfer.set(SUPERAPI_TREE_MIME_TYPE, new vscode.DataTransferItem(dragData));
+    }
+  }
+
+  async handleDrop(
+    target: ApiTreeItem | undefined,
+    dataTransfer: vscode.DataTransfer,
+    _token: vscode.CancellationToken
+  ): Promise<void> {
+    const transferItem = dataTransfer.get(SUPERAPI_TREE_MIME_TYPE);
+    if (!transferItem) {
+      return;
+    }
+
+    const dragData = transferItem.value as Array<{ type: string; filePath: string }>;
+    if (!dragData || dragData.length === 0) {
+      return;
+    }
+
+    // Determine target folder
+    let targetFolder: string | undefined;
+
+    if (!target) {
+      // Dropped on root - not allowed without a target folder
+      return;
+    }
+
+    if (target.itemType === 'folder' && target.folderPath) {
+      targetFolder = target.folderPath;
+    } else if (target.itemType === 'file' && target.apiFile) {
+      // If dropped on a file, use the file's parent folder
+      targetFolder = path.dirname(target.apiFile.filePath);
+    } else {
+      return;
+    }
+
+    if (!targetFolder) {
+      return;
+    }
+
+    // Move each dragged file
+    for (const item of dragData) {
+      if (item.type === 'file' && item.filePath) {
+        const sourcePath = item.filePath;
+        const fileName = path.basename(sourcePath);
+        const targetPath = path.join(targetFolder, fileName);
+
+        // Don't move to the same location
+        if (sourcePath === targetPath) {
+          continue;
+        }
+
+        // Don't move if target already exists
+        if (fs.existsSync(targetPath)) {
+          vscode.window.showWarningMessage(`File "${fileName}" already exists in the target folder`);
+          continue;
+        }
+
+        try {
+          // Move the file
+          await fs.promises.rename(sourcePath, targetPath);
+
+          // Notify callback to refresh
+          if (this.onDidMoveFile) {
+            await this.onDidMoveFile(sourcePath, targetPath);
+          }
+
+          vscode.window.showInformationMessage(`Moved "${fileName}" successfully`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`Failed to move file: ${message}`);
+        }
+      }
+    }
   }
 }
