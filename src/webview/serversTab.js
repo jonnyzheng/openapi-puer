@@ -78,11 +78,13 @@
         server.description = descInput.value.trim();
       }
 
+      const filePath = S.currentEndpoint?.filePath || S.currentFilePath;
+
       if (mode === 'add') {
         S.vscode.postMessage({
           type: 'addServer',
           payload: {
-            filePath: S.currentEndpoint.filePath,
+            filePath,
             server
           }
         });
@@ -90,7 +92,7 @@
         S.vscode.postMessage({
           type: 'updateServer',
           payload: {
-            filePath: S.currentEndpoint.filePath,
+            filePath,
             index,
             server
           }
@@ -149,10 +151,11 @@
     deleteBtn.className = 'server-dialog-delete';
     deleteBtn.textContent = 'Delete';
     deleteBtn.addEventListener('click', () => {
+      const filePath = S.currentEndpoint?.filePath || S.currentFilePath;
       S.vscode.postMessage({
         type: 'deleteServer',
         payload: {
-          filePath: S.currentEndpoint.filePath,
+          filePath,
           index
         }
       });
@@ -251,12 +254,7 @@
       deleteBtn.textContent = 'Delete';
       deleteBtn.title = 'Delete this server';
       deleteBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to delete this server?')) {
-          S.vscode.postMessage({
-            type: 'deleteServer',
-            payload: { filePath: S.currentFilePath, index }
-          });
-        }
+        S.showDeleteServerDialog(index, server.url);
       });
 
       serverActions.appendChild(editBtn);

@@ -56,3 +56,17 @@ src/
 ## Debugging
 
 Press `F5` in VS Code to launch the Extension Development Host.
+
+
+## coding
+
+- Use TypeScript for all source code.
+- Follow VS Code extension development best practices.
+- Use the same ui design for webview as the one in the current version of SuperAPI.
+- Keep the code modular and maintainable, with clear separation of concerns between different services and components.
+- Write unit tests for critical services and integration tests for the extension as a whole.
+- keep the same behavior of the edit,delete, add operations for api items in the GUI of SuperAPI.
+
+## UI Rules
+
+- When an inline edit input replaces a text label in a table cell, the input height must match the original text label height. Use consistent `height`, `line-height`, `padding`, and `box-sizing` between `.editable-cell` and its `.inline-edit-input` so there is no layout shift on focus.

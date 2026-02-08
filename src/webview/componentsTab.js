@@ -453,7 +453,13 @@
             typeSpanCell.className = 'editable-cell';
             typeSpanCell.textContent = propSchema.type || 'any';
             typeSpanCell.title = 'Click to change type';
-            typeSpanCell.addEventListener('click', function() {
+            typeSpanCell.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+
+              // Prevent multiple selects
+              if (typeSpanCell.querySelector('select')) return;
+
               var select = document.createElement('select');
               select.className = 'inline-edit-input';
               ['string', 'integer', 'number', 'boolean', 'object', 'array'].forEach(function(t) {
@@ -465,9 +471,17 @@
               });
               typeSpanCell.textContent = '';
               typeSpanCell.appendChild(select);
-              select.focus();
 
+              // Use setTimeout to ensure focus happens after current event cycle
+              setTimeout(function() {
+                select.focus();
+                select.click();
+              }, 0);
+
+              var finished = false;
               var finish = function() {
+                if (finished) return;
+                finished = true;
                 var newType = select.value;
                 if (newType !== propSchema.type) {
                   S.vscode.postMessage({
@@ -478,8 +492,9 @@
                   typeSpanCell.textContent = propSchema.type || 'any';
                 }
               };
+
               select.addEventListener('blur', finish);
-              select.addEventListener('change', function() { select.blur(); });
+              select.addEventListener('change', finish);
             });
             typeCell.appendChild(typeSpanCell);
 

@@ -14,6 +14,9 @@ export class ApiPanel {
   private onSendRequestEmitter = new vscode.EventEmitter<RequestConfig>();
   readonly onSendRequest = this.onSendRequestEmitter.event;
 
+  private _webviewReady: boolean = false;
+  private _messageQueue: WebviewMessage[] = [];
+
   private onUpdateOverviewEmitter = new vscode.EventEmitter<{
     filePath: string;
     path: string;
@@ -394,7 +397,8 @@ export class ApiPanel {
         });
         break;
       case 'ready':
-        // Webview is ready
+        this._webviewReady = true;
+        this._flushMessageQueue();
         break;
     }
   }
@@ -421,7 +425,20 @@ export class ApiPanel {
   }
 
   private postMessage(message: WebviewMessage): void {
-    this.panel.webview.postMessage(message);
+    if (this._webviewReady) {
+      this.panel.webview.postMessage(message);
+    } else {
+      this._messageQueue.push(message);
+    }
+  }
+
+  private _flushMessageQueue(): void {
+    while (this._messageQueue.length > 0) {
+      const message = this._messageQueue.shift();
+      if (message) {
+        this.panel.webview.postMessage(message);
+      }
+    }
   }
 
   private getHtmlContent(): string {

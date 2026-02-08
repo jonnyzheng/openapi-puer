@@ -117,6 +117,7 @@
         S.currentServers = message.payload.servers || [];
         S.updateServersTabVisibility();
         S.renderServers();
+        S.renderServerList();
         break;
       case 'showAddServer':
         S.handleShowAddServer(message.payload.filePath, message.payload.servers);

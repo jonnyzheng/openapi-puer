@@ -351,15 +351,17 @@ export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropContr
   handleDrag(
     source: readonly ApiTreeItem[],
     dataTransfer: vscode.DataTransfer,
-    _token: vscode.CancellationToken
+    token: vscode.CancellationToken
   ): void | Thenable<void> {
-    // Only allow dragging files
-    const draggableItems = source.filter(item => item.itemType === 'file' && item.apiFile);
+    // Allow dragging files and folders
+    const draggableItems = source.filter(item =>
+      (item.itemType === 'file' && item.apiFile) || item.itemType === 'folder'
+    );
 
     if (draggableItems.length > 0) {
       const dragData = draggableItems.map(item => ({
         type: item.itemType,
-        filePath: item.apiFile?.filePath
+        filePath: item.resourceUri!.fsPath
       }));
       dataTransfer.set(SUPERAPI_TREE_MIME_TYPE, new vscode.DataTransferItem(dragData));
     }
@@ -401,38 +403,45 @@ export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropContr
       return;
     }
 
-    // Move each dragged file
+    // Move each dragged item
     for (const item of dragData) {
-      if (item.type === 'file' && item.filePath) {
-        const sourcePath = item.filePath;
-        const fileName = path.basename(sourcePath);
-        const targetPath = path.join(targetFolder, fileName);
+      const sourcePath = item.filePath;
+      const itemName = path.basename(sourcePath);
+      const targetPath = path.join(targetFolder, itemName);
 
-        // Don't move to the same location
-        if (sourcePath === targetPath) {
-          continue;
+      // Don't move to the same location
+      if (sourcePath === targetPath) {
+        continue;
+      }
+
+      // For folders, prevent moving into itself or a descendant
+      if (item.type === 'folder' && targetFolder.startsWith(sourcePath + path.sep)) {
+        vscode.window.showWarningMessage(`Cannot move folder "${itemName}" into itself`);
+        continue;
+      }
+
+      // Also prevent if target is the same parent
+      if (path.dirname(sourcePath) === targetFolder) {
+        continue;
+      }
+
+      // Don't move if target already exists
+      if (fs.existsSync(targetPath)) {
+        vscode.window.showWarningMessage(`"${itemName}" already exists in the target folder`);
+        continue;
+      }
+
+      try {
+        await fs.promises.rename(sourcePath, targetPath);
+
+        if (this.onDidMoveFile) {
+          await this.onDidMoveFile(sourcePath, targetPath);
         }
 
-        // Don't move if target already exists
-        if (fs.existsSync(targetPath)) {
-          vscode.window.showWarningMessage(`File "${fileName}" already exists in the target folder`);
-          continue;
-        }
-
-        try {
-          // Move the file
-          await fs.promises.rename(sourcePath, targetPath);
-
-          // Notify callback to refresh
-          if (this.onDidMoveFile) {
-            await this.onDidMoveFile(sourcePath, targetPath);
-          }
-
-          vscode.window.showInformationMessage(`Moved "${fileName}" successfully`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          vscode.window.showErrorMessage(`Failed to move file: ${message}`);
-        }
+        vscode.window.showInformationMessage(`Moved "${itemName}" successfully`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to move "${itemName}": ${message}`);
       }
     }
   }
