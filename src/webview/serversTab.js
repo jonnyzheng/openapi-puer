@@ -404,6 +404,7 @@
       <div id="main-tabs">
         <button class="main-tab-btn active" data-api-tab="info">Info</button>
         <button class="main-tab-btn" data-api-tab="servers">Servers</button>
+        <button class="main-tab-btn" data-api-tab="source">Source</button>
       </div>
 
       <div id="content">
@@ -435,6 +436,14 @@
           </div>
         </div>
 
+        <div id="api-source-tab" class="main-tab-content">
+          <div id="endpoint-details">
+            <div class="schema-source-wrapper">
+              <pre class="schema-source-pre"><code class="schema-source-code" id="api-source-code"></code></pre>
+            </div>
+          </div>
+        </div>
+
         <div id="api-servers-tab" class="main-tab-content">
           <div id="endpoint-details">
             <div class="servers-list-container">
@@ -449,6 +458,14 @@
       </div>
     `;
 
+    // Populate source tab
+    var apiSourceCode = document.getElementById('api-source-code');
+    if (apiSourceCode && payload.spec) {
+      apiSourceCode.innerHTML = S.highlightJson(JSON.stringify(payload.spec, null, 2));
+    } else if (apiSourceCode) {
+      apiSourceCode.textContent = '// No source available';
+    }
+
     // Setup tab switching
     container.querySelectorAll('#main-tabs .main-tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -456,6 +473,7 @@
         btn.classList.add('active');
         var tabName = btn.dataset.apiTab;
         document.getElementById('api-info-tab').classList.toggle('active', tabName === 'info');
+        document.getElementById('api-source-tab').classList.toggle('active', tabName === 'source');
         document.getElementById('api-servers-tab').classList.toggle('active', tabName === 'servers');
       });
     });

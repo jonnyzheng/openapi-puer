@@ -3,6 +3,18 @@
 (function() {
   const S = window.SuperAPI;
 
+  // Save the initial endpoint HTML so it can be restored when switching back from api/schema views
+  S._initialAppHtml = document.getElementById('app').innerHTML;
+
+  S.restoreEndpointView = function() {
+    var app = document.getElementById('app');
+    if (!document.getElementById('method-badge')) {
+      app.innerHTML = S._initialAppHtml;
+      setupEventListeners();
+      setupCollapsibleSections();
+    }
+  };
+
   function init() {
     setupEventListeners();
     setupCollapsibleSections();
@@ -96,6 +108,7 @@
     const message = event.data;
     switch (message.type) {
       case 'showEndpoint':
+        S.restoreEndpointView();
         S.showEndpoint(message.payload.endpoint, message.payload.servers, message.payload.components);
         break;
       case 'responseReceived':
@@ -131,6 +144,11 @@
       case 'updateSchemas':
         S.currentComponents = message.payload.components;
         S.renderEditableSchemas();
+        break;
+      case 'showAddSchemaDialog':
+        if (S.showSchemaDialog) {
+          S.showSchemaDialog();
+        }
         break;
     }
   });

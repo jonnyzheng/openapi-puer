@@ -77,6 +77,17 @@ export interface SchemaObject {
   nullable?: boolean;
   readOnly?: boolean;
   writeOnly?: boolean;
+  deprecated?: boolean;
+  pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: boolean | number;
+  exclusiveMaximum?: boolean | number;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
   $ref?: string;
 }
 

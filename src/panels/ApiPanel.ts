@@ -121,7 +121,14 @@ export class ApiPanel {
   private onAddSchemaPropertyEmitter = new vscode.EventEmitter<{
     filePath: string;
     schemaName: string;
-    property: { name: string; type: string; description?: string; required?: boolean };
+    property: {
+      name: string; type: string; description?: string; required?: boolean;
+      format?: string; example?: unknown; default?: unknown; enum?: unknown[];
+      nullable?: boolean; deprecated?: boolean; readOnly?: boolean; writeOnly?: boolean;
+      pattern?: string; minLength?: number; maxLength?: number;
+      minimum?: number; maximum?: number; exclusiveMinimum?: boolean | number; exclusiveMaximum?: boolean | number;
+      minItems?: number; maxItems?: number; uniqueItems?: boolean;
+    };
   }>();
   readonly onAddSchemaProperty = this.onAddSchemaPropertyEmitter.event;
 
@@ -136,7 +143,14 @@ export class ApiPanel {
     filePath: string;
     schemaName: string;
     propertyName: string;
-    updates: { name?: string; type?: string; description?: string; required?: boolean };
+    updates: {
+      name?: string; type?: string; description?: string; required?: boolean;
+      format?: string | null; example?: unknown | null; default?: unknown | null; enum?: unknown[] | null;
+      nullable?: boolean | null; deprecated?: boolean | null; readOnly?: boolean | null; writeOnly?: boolean | null;
+      pattern?: string | null; minLength?: number | null; maxLength?: number | null;
+      minimum?: number | null; maximum?: number | null; exclusiveMinimum?: boolean | number | null; exclusiveMaximum?: boolean | number | null;
+      minItems?: number | null; maxItems?: number | null; uniqueItems?: boolean | null;
+    };
   }>();
   readonly onUpdateSchemaProperty = this.onUpdateSchemaPropertyEmitter.event;
 
@@ -188,6 +202,34 @@ export class ApiPanel {
 
     ApiPanel.currentPanel = new ApiPanel(panel, extensionUri);
     return ApiPanel.currentPanel;
+  }
+
+  public static createNew(extensionUri: vscode.Uri, title?: string): ApiPanel {
+    const column = vscode.window.activeTextEditor
+      ? vscode.window.activeTextEditor.viewColumn
+      : vscode.ViewColumn.One;
+
+    const panel = vscode.window.createWebviewPanel(
+      ApiPanel.viewType,
+      title || 'SuperAPI',
+      column || vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, 'src', 'webview'),
+          vscode.Uri.joinPath(extensionUri, 'out', 'webview'),
+          vscode.Uri.joinPath(extensionUri, 'resources')
+        ]
+      }
+    );
+
+    panel.iconPath = {
+      light: vscode.Uri.joinPath(extensionUri, 'resources', 'icon-light.svg'),
+      dark: vscode.Uri.joinPath(extensionUri, 'resources', 'icon-dark.svg')
+    };
+
+    return new ApiPanel(panel, extensionUri);
   }
 
   public showEndpoint(
@@ -250,6 +292,7 @@ export class ApiPanel {
     version: string;
     infoVersion?: string;
     servers: ServerInfo[];
+    spec?: unknown;
   }): void {
     this.panel.title = apiFile.title || 'API Info';
     this.postMessage({
@@ -378,7 +421,13 @@ export class ApiPanel {
         this.onAddSchemaPropertyEmitter.fire(message.payload as {
           filePath: string;
           schemaName: string;
-          property: { name: string; type: string; description?: string; required?: boolean };
+          property: {
+            name: string; type: string; description?: string; required?: boolean;
+            format?: string; example?: unknown; default?: unknown; enum?: unknown[];
+            nullable?: boolean; deprecated?: boolean; readOnly?: boolean; writeOnly?: boolean;
+            pattern?: string; minLength?: number; maxLength?: number;
+            minimum?: number; maximum?: number;
+          };
         });
         break;
       case 'deleteSchemaProperty':
@@ -393,7 +442,13 @@ export class ApiPanel {
           filePath: string;
           schemaName: string;
           propertyName: string;
-          updates: { name?: string; type?: string; description?: string; required?: boolean };
+          updates: {
+            name?: string; type?: string; description?: string; required?: boolean;
+            format?: string | null; example?: unknown | null; default?: unknown | null; enum?: unknown[] | null;
+            nullable?: boolean | null; deprecated?: boolean | null; readOnly?: boolean | null; writeOnly?: boolean | null;
+            pattern?: string | null; minLength?: number | null; maxLength?: number | null;
+            minimum?: number | null; maximum?: number | null;
+          };
         });
         break;
       case 'ready':
@@ -422,6 +477,10 @@ export class ApiPanel {
       type: 'updateSchemas',
       payload: { components }
     });
+  }
+
+  public postMessagePublic(message: WebviewMessage): void {
+    this.postMessage(message);
   }
 
   private postMessage(message: WebviewMessage): void {

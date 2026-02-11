@@ -115,6 +115,19 @@ export class OpenApiService {
       default: schema.default,
       nullable: schema.nullable as boolean | undefined,
       enum: schema.enum as unknown[] | undefined,
+      readOnly: schema.readOnly as boolean | undefined,
+      writeOnly: schema.writeOnly as boolean | undefined,
+      deprecated: schema.deprecated as boolean | undefined,
+      pattern: schema.pattern as string | undefined,
+      minLength: schema.minLength as number | undefined,
+      maxLength: schema.maxLength as number | undefined,
+      minimum: schema.minimum as number | undefined,
+      maximum: schema.maximum as number | undefined,
+      exclusiveMinimum: schema.exclusiveMinimum as boolean | number | undefined,
+      exclusiveMaximum: schema.exclusiveMaximum as boolean | number | undefined,
+      minItems: schema.minItems as number | undefined,
+      maxItems: schema.maxItems as number | undefined,
+      uniqueItems: schema.uniqueItems as boolean | undefined,
     };
 
     if (schema.required && Array.isArray(schema.required)) {
@@ -398,6 +411,42 @@ export class OpenApiService {
     }
     if (v3Schema.writeOnly !== undefined) {
       result.writeOnly = v3Schema.writeOnly;
+    }
+
+    // Additional schema fields
+    const anyResolved = resolved as Record<string, unknown>;
+    if (anyResolved.deprecated !== undefined) {
+      result.deprecated = anyResolved.deprecated as boolean;
+    }
+    if (anyResolved.pattern !== undefined) {
+      result.pattern = anyResolved.pattern as string;
+    }
+    if (anyResolved.minLength !== undefined) {
+      result.minLength = anyResolved.minLength as number;
+    }
+    if (anyResolved.maxLength !== undefined) {
+      result.maxLength = anyResolved.maxLength as number;
+    }
+    if (anyResolved.minimum !== undefined) {
+      result.minimum = anyResolved.minimum as number;
+    }
+    if (anyResolved.maximum !== undefined) {
+      result.maximum = anyResolved.maximum as number;
+    }
+    if (anyResolved.exclusiveMinimum !== undefined) {
+      result.exclusiveMinimum = anyResolved.exclusiveMinimum as boolean | number;
+    }
+    if (anyResolved.exclusiveMaximum !== undefined) {
+      result.exclusiveMaximum = anyResolved.exclusiveMaximum as boolean | number;
+    }
+    if (anyResolved.minItems !== undefined) {
+      result.minItems = anyResolved.minItems as number;
+    }
+    if (anyResolved.maxItems !== undefined) {
+      result.maxItems = anyResolved.maxItems as number;
+    }
+    if (anyResolved.uniqueItems !== undefined) {
+      result.uniqueItems = anyResolved.uniqueItems as boolean;
     }
 
     return result;
@@ -1261,7 +1310,14 @@ export class OpenApiService {
   async addSchemaProperty(
     filePath: string,
     schemaName: string,
-    property: { name: string; type: string; description?: string; required?: boolean }
+    property: {
+      name: string; type: string; description?: string; required?: boolean;
+      format?: string; example?: unknown; default?: unknown; enum?: unknown[];
+      nullable?: boolean; deprecated?: boolean; readOnly?: boolean; writeOnly?: boolean;
+      pattern?: string; minLength?: number; maxLength?: number;
+      minimum?: number; maximum?: number; exclusiveMinimum?: boolean | number; exclusiveMaximum?: boolean | number;
+      minItems?: number; maxItems?: number; uniqueItems?: boolean;
+    }
   ): Promise<{ success: boolean; message?: string }> {
     try {
       const content = await fs.promises.readFile(filePath, 'utf-8');
@@ -1285,6 +1341,12 @@ export class OpenApiService {
       const propDef: Record<string, unknown> = { type: property.type };
       if (property.description) {
         propDef.description = property.description;
+      }
+      const commonFields = ['format', 'example', 'default', 'enum', 'nullable', 'deprecated', 'readOnly', 'writeOnly', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'uniqueItems'] as const;
+      for (const field of commonFields) {
+        if ((property as Record<string, unknown>)[field] !== undefined) {
+          propDef[field] = (property as Record<string, unknown>)[field];
+        }
       }
       props[property.name] = propDef;
 
@@ -1353,7 +1415,14 @@ export class OpenApiService {
     filePath: string,
     schemaName: string,
     propertyName: string,
-    updates: { name?: string; type?: string; description?: string; required?: boolean }
+    updates: {
+      name?: string; type?: string; description?: string; required?: boolean;
+      format?: string | null; example?: unknown | null; default?: unknown | null; enum?: unknown[] | null;
+      nullable?: boolean | null; deprecated?: boolean | null; readOnly?: boolean | null; writeOnly?: boolean | null;
+      pattern?: string | null; minLength?: number | null; maxLength?: number | null;
+      minimum?: number | null; maximum?: number | null; exclusiveMinimum?: boolean | number | null; exclusiveMaximum?: boolean | number | null;
+      minItems?: number | null; maxItems?: number | null; uniqueItems?: boolean | null;
+    }
   ): Promise<{ success: boolean; message?: string }> {
     try {
       const content = await fs.promises.readFile(filePath, 'utf-8');
@@ -1420,6 +1489,17 @@ export class OpenApiService {
           reqArr.push(propName);
         } else if (!updates.required && idx !== -1) {
           reqArr.splice(idx, 1);
+        }
+      }
+
+      // Update common schema fields
+      const commonFields = ['format', 'example', 'default', 'enum', 'nullable', 'deprecated', 'readOnly', 'writeOnly', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'uniqueItems'] as const;
+      for (const field of commonFields) {
+        const value = (updates as Record<string, unknown>)[field];
+        if (value === null) {
+          delete propDef[field];
+        } else if (value !== undefined) {
+          propDef[field] = value;
         }
       }
 

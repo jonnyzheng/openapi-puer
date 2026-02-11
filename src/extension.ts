@@ -385,59 +385,16 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   const addModelCommand = vscode.commands.registerCommand('superapi.addModel', async (item?: ApiTreeItem) => {
-    if (!item || item.itemType !== 'file' || !item.apiFile) {
+    if (!item || !item.apiFile) {
       return;
     }
 
-    const filePath = item.apiFile.filePath;
+    // Open the schema file panel and trigger the add schema dialog
+    openSchemaFilePanel(context, item.apiFile);
 
-    // Get model name
-    const modelName = await vscode.window.showInputBox({
-      prompt: 'Enter model name',
-      placeHolder: 'e.g., User, Order, Product',
-      validateInput: (value) => {
-        if (!value || value.trim() === '') {
-          return 'Model name is required';
-        }
-        if (!/^[A-Za-z][A-Za-z0-9]*$/.test(value)) {
-          return 'Model name must start with a letter and contain only letters and numbers';
-        }
-        return undefined;
-      }
-    });
-
-    if (!modelName) {
-      return;
-    }
-
-    // Get model type
-    const modelType = await vscode.window.showQuickPick(
-      [
-        { label: 'object', description: 'An object with properties' },
-        { label: 'string', description: 'A string value' },
-        { label: 'integer', description: 'An integer number' },
-        { label: 'number', description: 'A floating-point number' },
-        { label: 'boolean', description: 'A true/false value' },
-        { label: 'array', description: 'An array of items' }
-      ],
-      { placeHolder: 'Select model type' }
-    );
-
-    if (!modelType) {
-      return;
-    }
-
-    const result = await openApiService.addModel(filePath, modelName.trim(), modelType.label);
-    if (result.success) {
-      vscode.window.showInformationMessage(`Model "${modelName}" added`);
-      await refreshApiFiles();
-
-      // Open the file to show the new model
-      const doc = await vscode.workspace.openTextDocument(filePath);
-      await vscode.window.showTextDocument(doc);
-    } else {
-      vscode.window.showErrorMessage(result.message || 'Failed to add model');
-    }
+    // Wait briefly for the panel to be ready, then trigger the add schema dialog
+    const panel = ApiPanel.createOrShow(context.extensionUri);
+    panel.postMessagePublic({ type: 'showAddSchemaDialog' });
   });
 
   const addServerCommand = vscode.commands.registerCommand('superapi.addServer', async (item?: ApiTreeItem) => {
@@ -517,6 +474,21 @@ export function activate(context: vscode.ExtensionContext) {
     openSchemaFilePanel(context, apiFile);
   });
 
+  const openInNewTabCommand = vscode.commands.registerCommand('superapi.openInNewTab', (treeItem: ApiTreeItem) => {
+    if (treeItem.itemType === 'endpoint' && treeItem.endpoint) {
+      openEndpointInNewTab(context, treeItem.endpoint);
+    } else if (treeItem.apiFile) {
+      const file = treeItem.apiFile;
+      const isApiJson = file.fileName.toLowerCase() === 'api.json';
+      const isSchemaFile = !isApiJson && file.endpoints.length === 0 && !!file.components;
+      if (isApiJson) {
+        openApiFileInNewTab(context, file);
+      } else if (isSchemaFile) {
+        openSchemaFileInNewTab(context, file);
+      }
+    }
+  });
+
   // Setup file watcher
   const apiDirectory = configService.getApiDirectory();
   if (apiDirectory && configService.validateDirectory(apiDirectory).valid) {
@@ -570,6 +542,7 @@ export function activate(context: vscode.ExtensionContext) {
     addServerCommand,
     openApiFileCommand,
     openSchemaFileCommand,
+    openInNewTabCommand,
     configChangeDisposable,
     { dispose: () => openApiService.dispose() },
     { dispose: () => configService.dispose() },
@@ -782,7 +755,8 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
     description: apiFile.description,
     version: apiFile.version,
     infoVersion: apiFile.spec?.info?.version,
-    servers: apiFile.servers || []
+    servers: apiFile.servers || [],
+    spec: apiFile.spec
   });
 
   // Only register handlers once
@@ -963,4 +937,171 @@ function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile)
   panel.onDispose(() => {
     panelHandlersRegistered = false;
   });
+}
+
+function setupNewTabHandlers(panel: ApiPanel): void {
+  panel.onSendRequest(async (config) => {
+    panel.showLoading(true);
+    try {
+      const variables = await environmentService.getVariablesAsRecord();
+      const response = await httpService.sendRequest(config, variables);
+      panel.showResponse(response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      panel.showError(message);
+    }
+  });
+
+  panel.onUpdateOverview(async (data) => {
+    const result = await openApiService.updateEndpointOverview(data.filePath, data.path, data.method, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdateParameter(async (data) => {
+    const result = await openApiService.updateParameter(data.filePath, data.path, data.method, data.paramName, data.paramIn, data.field, data.value);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onAddParameter(async (data) => {
+    const result = await openApiService.addParameter(data.filePath, data.path, data.method, data.parameter);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onDeleteParameter(async (data) => {
+    const result = await openApiService.deleteParameter(data.filePath, data.path, data.method, data.paramName, data.paramIn);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdatePath(async (data) => {
+    const result = await openApiService.updatePath(data.filePath, data.oldPath, data.newPath, data.method);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onAddSchema(async (data) => {
+    const result = await openApiService.addModel(data.filePath, data.schemaName, data.schemaType);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onDeleteSchema(async (data) => {
+    const result = await openApiService.deleteSchema(data.filePath, data.schemaName);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onAddSchemaProperty(async (data) => {
+    const result = await openApiService.addSchemaProperty(data.filePath, data.schemaName, data.property);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onDeleteSchemaProperty(async (data) => {
+    const result = await openApiService.deleteSchemaProperty(data.filePath, data.schemaName, data.propertyName);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onUpdateSchemaProperty(async (data) => {
+    const result = await openApiService.updateSchemaProperty(data.filePath, data.schemaName, data.propertyName, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onUpdateApiInfo(async (data) => {
+    const result = await openApiService.updateApiInfo(data.filePath, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onAddServer(async (data) => {
+    const result = await openApiService.addServer(data.filePath, data.server);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  panel.onUpdateServer(async (data) => {
+    const result = await openApiService.updateServer(data.filePath, data.index, data.server);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success && result.servers) {
+      panel.updateServers(result.servers);
+      await refreshApiFiles();
+    }
+  });
+
+  panel.onDeleteServer(async (data) => {
+    const result = await openApiService.deleteServer(data.filePath, data.index);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      panel.updateServers(result.servers || []);
+      await refreshApiFiles();
+    }
+  });
+}
+
+function openEndpointInNewTab(context: vscode.ExtensionContext, endpoint: ApiEndpoint): void {
+  const title = `${endpoint.method.toUpperCase()} ${endpoint.summary || endpoint.path}`;
+  const panel = ApiPanel.createNew(context.extensionUri, title);
+
+  const apiFile = apiFiles.find(f => f.filePath === endpoint.filePath);
+  const servers = apiFile?.servers || [];
+  const components = apiFile?.components;
+
+  panel.showEndpoint(endpoint, servers, components);
+  setupNewTabHandlers(panel);
+}
+
+function openApiFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const title = apiFile.title || apiFile.fileName;
+  const panel = ApiPanel.createNew(context.extensionUri, title);
+
+  panel.showApiFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    description: apiFile.description,
+    version: apiFile.version,
+    infoVersion: apiFile.spec?.info?.version,
+    servers: apiFile.servers || [],
+    spec: apiFile.spec
+  });
+  setupNewTabHandlers(panel);
+}
+
+function openSchemaFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const title = apiFile.title || apiFile.fileName;
+  const panel = ApiPanel.createNew(context.extensionUri, title);
+
+  panel.showSchemaFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    components: apiFile.components || {}
+  });
+  setupNewTabHandlers(panel);
 }
