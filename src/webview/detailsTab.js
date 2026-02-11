@@ -1197,7 +1197,6 @@
     document.getElementById('response-status').style.display = 'none';
     document.getElementById('response-tabs').style.display = 'none';
     document.getElementById('response-toolbar').style.display = 'none';
-    document.getElementById('response-search').style.display = 'none';
-    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   };
 })();

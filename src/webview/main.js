@@ -24,18 +24,21 @@
   function setupEventListeners() {
     const sendBtn = document.getElementById('send-btn');
     const cancelBtn = document.getElementById('cancel-btn');
-    const queryParamsTable = document.getElementById('query-params-table').querySelector('tbody');
-    const headersTable = document.getElementById('headers-table').querySelector('tbody');
+    const queryParamsTable = document.getElementById('req-query-params-table').querySelector('tbody');
+    const headersTable = document.getElementById('req-headers-table').querySelector('tbody');
+    const cookiesTable = document.getElementById('req-cookies-table').querySelector('tbody');
     const prettyPrint = document.getElementById('pretty-print');
     const wordWrap = document.getElementById('word-wrap');
-    const searchInput = document.getElementById('search-input');
-
     sendBtn.addEventListener('click', S.sendRequest);
     cancelBtn.addEventListener('click', S.cancelRequest);
 
-    document.getElementById('add-query-param').addEventListener('click', () => S.addParamRow(queryParamsTable));
-    document.getElementById('add-header').addEventListener('click', () => S.addParamRow(headersTable));
-    document.getElementById('generate-body-btn').addEventListener('click', S.generateBodyFromSchema);
+    document.getElementById('add-query-param').addEventListener('click', () => S.addCustomParamRow(queryParamsTable));
+    document.getElementById('add-header').addEventListener('click', () => S.addCustomParamRow(headersTable));
+    document.getElementById('add-cookie').addEventListener('click', () => S.addCustomParamRow(cookiesTable));
+
+    document.querySelectorAll('.request-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => S.switchRequestTab(btn.dataset.reqTab));
+    });
 
     document.querySelectorAll('.main-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => S.switchMainTab(btn.dataset.mainTab));
@@ -54,18 +57,10 @@
     document.getElementById('copy-curl-btn').addEventListener('click', S.copyCurl);
     document.getElementById('save-response-btn').addEventListener('click', S.saveResponse);
 
-    searchInput.addEventListener('input', S.searchInResponse);
-    document.getElementById('search-prev').addEventListener('click', () => S.navigateSearch(-1));
-    document.getElementById('search-next').addEventListener('click', () => S.navigateSearch(1));
-
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         S.sendRequest();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        searchInput.focus();
       }
     });
   }
@@ -91,8 +86,12 @@
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === tab);
     });
-    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-    document.getElementById(`response-${tab}-tab`).style.display = 'block';
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.getElementById(`response-${tab}-tab`).classList.add('active');
+
+    // Only show toolbar for Body tab
+    var isBody = tab === 'body';
+    document.getElementById('response-toolbar').style.display = isBody ? 'flex' : 'none';
   };
 
   function setupCollapsibleSections() {

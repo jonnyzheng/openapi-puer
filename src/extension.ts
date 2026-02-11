@@ -583,7 +583,10 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
   panel.showEndpoint(endpoint, servers, components);
   updatePanelEnvironments();
 
-  // Only register handlers once
+  registerPanelHandlers(panel);
+}
+
+function registerPanelHandlers(panel: ApiPanel): void {
   if (panelHandlersRegistered) {
     return;
   }
@@ -600,6 +603,8 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       panel.showError(message);
+    } finally {
+      panel.showLoading(false);
     }
   });
 
@@ -614,7 +619,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
     panel.notifyOverviewSaved(result.success, result.message);
 
-    // Refresh the tree view if save was successful
     if (result.success) {
       await refreshApiFiles();
     }
@@ -634,7 +638,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
     panel.notifyOverviewSaved(result.success, result.message);
 
-    // Refresh the tree view if save was successful
     if (result.success) {
       await refreshApiFiles();
     }
@@ -651,7 +654,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
     panel.notifyOverviewSaved(result.success, result.message);
 
-    // Refresh the tree view if save was successful
     if (result.success) {
       await refreshApiFiles();
     }
@@ -659,7 +661,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
   // Handle delete parameter
   panel.onDeleteParameter(async (data) => {
-    console.log('Extension received onDeleteParameter event:', data);
     const result = await openApiService.deleteParameter(
       data.filePath,
       data.path,
@@ -668,10 +669,8 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
       data.paramIn
     );
 
-    console.log('deleteParameter result:', result);
     panel.notifyOverviewSaved(result.success, result.message);
 
-    // Refresh the tree view if save was successful
     if (result.success) {
       await refreshApiFiles();
     }
@@ -704,7 +703,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
     panel.notifyOverviewSaved(result.success, result.message);
 
-    // Refresh the tree view if save was successful
     if (result.success) {
       await refreshApiFiles();
     }
@@ -756,31 +754,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
     }
   });
 
-  // Reset flag when panel is disposed
-  panel.onDispose(() => {
-    panelHandlersRegistered = false;
-  });
-}
-
-function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
-  const panel = ApiPanel.createOrShow(context.extensionUri);
-
-  panel.showApiFile({
-    filePath: apiFile.filePath,
-    title: apiFile.title,
-    description: apiFile.description,
-    version: apiFile.version,
-    infoVersion: apiFile.spec?.info?.version,
-    servers: apiFile.servers || [],
-    spec: apiFile.spec
-  });
-
-  // Only register handlers once
-  if (panelHandlersRegistered) {
-    return;
-  }
-  panelHandlersRegistered = true;
-
   // Handle update API info
   panel.onUpdateApiInfo(async (data) => {
     const result = await openApiService.updateApiInfo(data.filePath, data.updates);
@@ -792,89 +765,7 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
     }
   });
 
-  // Handle add server
-  panel.onAddServer(async (data) => {
-    const result = await openApiService.addServer(data.filePath, data.server);
-
-    panel.notifyOverviewSaved(result.success, result.message);
-
-    if (result.success && result.servers) {
-      panel.updateServers(result.servers);
-      await refreshApiFiles();
-    }
-  });
-
-  // Handle update server
-  panel.onUpdateServer(async (data) => {
-    const result = await openApiService.updateServer(data.filePath, data.index, data.server);
-
-    panel.notifyOverviewSaved(result.success, result.message);
-
-    if (result.success && result.servers) {
-      panel.updateServers(result.servers);
-      await refreshApiFiles();
-    }
-  });
-
-  // Handle delete server
-  panel.onDeleteServer(async (data) => {
-    const result = await openApiService.deleteServer(data.filePath, data.index);
-
-    panel.notifyOverviewSaved(result.success, result.message);
-
-    if (result.success) {
-      panel.updateServers(result.servers || []);
-      await refreshApiFiles();
-    }
-  });
-
-  // Reset flag when panel is disposed
-  panel.onDispose(() => {
-    panelHandlersRegistered = false;
-  });
-}
-
-function updateStatusBar(): void {
-  const activeEnv = environmentService.getActiveEnvironment();
-  if (activeEnv) {
-    statusBarItem.text = `$(globe) ${activeEnv.name}`;
-    statusBarItem.tooltip = `Active environment: ${activeEnv.name}\nClick to change`;
-  } else {
-    statusBarItem.text = '$(globe) No Environment';
-    statusBarItem.tooltip = 'Click to select an environment';
-  }
-}
-
-function updatePanelEnvironments(): void {
-  if (ApiPanel.currentPanel) {
-    const environments = environmentService.getEnvironments().map(e => ({
-      id: e.id,
-      name: e.name
-    }));
-    ApiPanel.currentPanel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
-  }
-}
-
-export function deactivate() {
-  // Cleanup is handled by disposables
-}
-
-function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
-  const panel = ApiPanel.createOrShow(context.extensionUri);
-
-  panel.showSchemaFile({
-    filePath: apiFile.filePath,
-    title: apiFile.title,
-    components: apiFile.components || {}
-  });
-
-  // Only register handlers once
-  if (panelHandlersRegistered) {
-    return;
-  }
-  panelHandlersRegistered = true;
-
-  // Handle add schema (reuses existing addModel)
+  // Handle add schema
   panel.onAddSchema(async (data) => {
     const result = await openApiService.addModel(data.filePath, data.schemaName, data.schemaType);
 
@@ -955,6 +846,59 @@ function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile)
   });
 }
 
+function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const panel = ApiPanel.createOrShow(context.extensionUri);
+
+  panel.showApiFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    description: apiFile.description,
+    version: apiFile.version,
+    infoVersion: apiFile.spec?.info?.version,
+    servers: apiFile.servers || [],
+    spec: apiFile.spec
+  });
+
+  registerPanelHandlers(panel);
+}
+
+function updateStatusBar(): void {
+  const activeEnv = environmentService.getActiveEnvironment();
+  if (activeEnv) {
+    statusBarItem.text = `$(globe) ${activeEnv.name}`;
+    statusBarItem.tooltip = `Active environment: ${activeEnv.name}\nClick to change`;
+  } else {
+    statusBarItem.text = '$(globe) No Environment';
+    statusBarItem.tooltip = 'Click to select an environment';
+  }
+}
+
+function updatePanelEnvironments(): void {
+  if (ApiPanel.currentPanel) {
+    const environments = environmentService.getEnvironments().map(e => ({
+      id: e.id,
+      name: e.name
+    }));
+    ApiPanel.currentPanel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
+  }
+}
+
+export function deactivate() {
+  // Cleanup is handled by disposables
+}
+
+function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
+  const panel = ApiPanel.createOrShow(context.extensionUri);
+
+  panel.showSchemaFile({
+    filePath: apiFile.filePath,
+    title: apiFile.title,
+    components: apiFile.components || {}
+  });
+
+  registerPanelHandlers(panel);
+}
+
 function setupNewTabHandlers(panel: ApiPanel): void {
   panel.onSendRequest(async (config) => {
     panel.showLoading(true);
@@ -965,6 +909,8 @@ function setupNewTabHandlers(panel: ApiPanel): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       panel.showError(message);
+    } finally {
+      panel.showLoading(false);
     }
   });
 

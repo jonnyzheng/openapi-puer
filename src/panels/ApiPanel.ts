@@ -613,20 +613,30 @@ export class ApiPanel {
         <div id="request-builder">
           <div id="base-url-row">
             <label for="base-url">Base URL</label>
-            <input type="text" id="base-url" placeholder="https://api.example.com">
+            <div id="base-url-send">
+              <input type="text" id="base-url" placeholder="https://api.example.com">
+              <button id="send-btn" class="primary-btn">Send</button>
+              <button id="cancel-btn" class="secondary-btn" style="display: none;">Cancel</button>
+              <span id="loading-indicator" style="display: none;">Sending...</span>
+            </div>
+          </div>
+          <div id="request-tabs" class="request-tabs">
+            <button class="request-tab-btn active" data-req-tab="params">Params</button>
+            <button class="request-tab-btn" data-req-tab="body">Body</button>
+            <button class="request-tab-btn" data-req-tab="headers">Headers</button>
+            <button class="request-tab-btn" data-req-tab="cookies">Cookies</button>
           </div>
 
-          <div id="path-params-container"></div>
-
-          <div id="query-params-container">
-            <h4>Query Parameters</h4>
-            <table id="query-params-table">
+          <div id="req-params-tab" class="request-tab-content active">
+            <div id="req-path-params"></div>
+            <table id="req-query-params-table" class="request-param-table">
               <thead>
                 <tr>
-                  <th></th>
-                  <th>Key</th>
-                  <th>Value</th>
-                  <th></th>
+                  <th class="req-col-check"></th>
+                  <th class="req-col-key">Key</th>
+                  <th class="req-col-value">Value</th>
+                  <th class="req-col-type">Type</th>
+                  <th class="req-col-action"></th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -634,15 +644,17 @@ export class ApiPanel {
             <button id="add-query-param" class="add-btn">+ Add Parameter</button>
           </div>
 
-          <div id="headers-container">
-            <h4>Headers</h4>
-            <table id="headers-table">
+          <div id="req-body-tab" class="request-tab-content"></div>
+
+          <div id="req-headers-tab" class="request-tab-content">
+            <table id="req-headers-table" class="request-param-table">
               <thead>
                 <tr>
-                  <th></th>
-                  <th>Key</th>
-                  <th>Value</th>
-                  <th></th>
+                  <th class="req-col-check"></th>
+                  <th class="req-col-key">Key</th>
+                  <th class="req-col-value">Value</th>
+                  <th class="req-col-type">Type</th>
+                  <th class="req-col-action"></th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -650,38 +662,37 @@ export class ApiPanel {
             <button id="add-header" class="add-btn">+ Add Header</button>
           </div>
 
-          <div id="body-container">
-            <h4>Body</h4>
-            <div id="content-type-row">
-              <select id="content-type-select">
-                <option value="application/json">application/json</option>
-                <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
-                <option value="multipart/form-data">multipart/form-data</option>
-                <option value="text/plain">text/plain</option>
-              </select>
-              <button id="generate-body-btn">Generate from Schema</button>
-            </div>
-            <textarea id="body-editor" placeholder="Request body..."></textarea>
+          <div id="req-cookies-tab" class="request-tab-content">
+            <table id="req-cookies-table" class="request-param-table">
+              <thead>
+                <tr>
+                  <th class="req-col-check"></th>
+                  <th class="req-col-key">Key</th>
+                  <th class="req-col-value">Value</th>
+                  <th class="req-col-type">Type</th>
+                  <th class="req-col-action"></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <button id="add-cookie" class="add-btn">+ Add Cookie</button>
           </div>
 
-          <div id="send-row">
-            <button id="send-btn" class="primary-btn">Send</button>
-            <button id="cancel-btn" class="secondary-btn" style="display: none;">Cancel</button>
-            <span id="loading-indicator" style="display: none;">Sending...</span>
-            <span id="elapsed-time"></span>
-          </div>
         </div>
 
         <div id="response-viewer">
-          <h3>Response</h3>
-          <div id="response-status">
-            <span id="status-code"></span>
-            <span id="response-time"></span>
-            <span id="response-size"></span>
+          <div id="response-header-row">
+            <h3>Response</h3>
+            <div id="response-status">
+              <span id="status-code"></span>
+              <span id="response-time"></span>
+              <span id="response-size"></span>
+            </div>
           </div>
           <div id="response-tabs">
             <button class="tab-btn active" data-tab="body">Body</button>
             <button class="tab-btn" data-tab="headers">Headers</button>
+            <button class="tab-btn" data-tab="cookies">Cookies</button>
           </div>
           <div id="response-toolbar">
             <label><input type="checkbox" id="pretty-print" checked> Pretty Print</label>
@@ -690,12 +701,6 @@ export class ApiPanel {
             <button id="copy-curl-btn">Copy as cURL</button>
             <button id="save-response-btn">Save</button>
           </div>
-          <div id="response-search">
-            <input type="text" id="search-input" placeholder="Search... (Ctrl+F)">
-            <span id="search-results"></span>
-            <button id="search-prev">↑</button>
-            <button id="search-next">↓</button>
-          </div>
           <div id="response-body-tab" class="tab-content active">
             <pre id="response-body"><code></code></pre>
           </div>
@@ -703,6 +708,24 @@ export class ApiPanel {
             <table id="response-headers-table">
               <tbody></tbody>
             </table>
+          </div>
+          <div id="response-cookies-tab" class="tab-content">
+            <table id="response-cookies-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Value</th>
+                  <th>Domain</th>
+                  <th>Path</th>
+                  <th>Expires</th>
+                  <th>HttpOnly</th>
+                  <th>Secure</th>
+                  <th>SameSite</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div id="no-cookies" class="no-params-message" style="text-align:center; padding:12px;">No cookies in response</div>
           </div>
           <div id="no-response">Send a request to see the response</div>
         </div>
