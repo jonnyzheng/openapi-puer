@@ -1,6 +1,6 @@
-// Servers tab logic for SuperAPI webview
+// Servers tab logic for OpenAPI Puer webview
 (function() {
-  const S = window.SuperAPI;
+  const S = window.OpenAPIPuer;
 
   S.updateServersTabVisibility = function() {
     const serversTabBtn = document.getElementById('servers-tab-btn');

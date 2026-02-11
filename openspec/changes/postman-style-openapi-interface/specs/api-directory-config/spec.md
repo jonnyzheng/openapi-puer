@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Configure API documents directory
-The system SHALL provide a configuration setting `superapi.apiDirectory` that allows users to specify the path to a directory containing OpenAPI specification files.
+The system SHALL provide a configuration setting `openapi-puer.apiDirectory` that allows users to specify the path to a directory containing OpenAPI specification files.
 
 #### Scenario: Set directory via settings
-- **WHEN** user sets `superapi.apiDirectory` in VS Code settings
+- **WHEN** user sets `openapi-puer.apiDirectory` in VS Code settings
 - **THEN** the extension SHALL use that directory as the root for API file discovery
 
 #### Scenario: Default to workspace root
-- **WHEN** no `superapi.apiDirectory` is configured
+- **WHEN** no `openapi-puer.apiDirectory` is configured
 - **THEN** the extension SHALL default to the workspace root directory
 
 ### Requirement: Validate configured directory

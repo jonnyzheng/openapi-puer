@@ -1,9 +1,9 @@
 {
-  "name": "superapi",
-  "displayName": "SuperAPI",
+  "name": "openapi-puer",
+  "displayName": "OpenAPI Puer",
   "description": "A Postman-style API development and testing tool for VS Code. Browse, test, and debug OpenAPI endpoints directly in your editor.",
   "version": "0.0.1",
-  "publisher": "superapi",
+  "publisher": "openapi-puer",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -25,9 +25,9 @@
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
-      "title": "SuperAPI",
+      "title": "OpenAPI Puer",
       "properties": {
-        "superapi.apiDirectory": {
+        "openapi-puer.apiDirectory": {
           "type": "string",
           "default": "",
           "description": "Path to the directory containing OpenAPI specification files. If empty, defaults to workspace root."
@@ -37,213 +37,213 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "superapi",
-          "title": "SuperAPI",
+          "id": "openapi-puer",
+          "title": "OpenAPI Puer",
           "icon": "resources/icon.svg"
         }
       ]
     },
     "views": {
-      "superapi": [
+      "openapi-puer": [
         {
-          "id": "superapi.apiExplorer",
+          "id": "openapi-puer.apiExplorer",
           "name": "API Explorer"
         }
       ]
     },
     "commands": [
       {
-        "command": "superapi.refresh",
+        "command": "openapi-puer.refresh",
         "title": "Refresh",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(refresh)"
       },
       {
-        "command": "superapi.openEndpoint",
+        "command": "openapi-puer.openEndpoint",
         "title": "Open Endpoint",
-        "category": "SuperAPI"
+        "category": "OpenAPI Puer"
       },
       {
-        "command": "superapi.toggleGroupByTags",
+        "command": "openapi-puer.toggleGroupByTags",
         "title": "Toggle Group by Tags",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(list-tree)"
       },
       {
-        "command": "superapi.createEnvironment",
+        "command": "openapi-puer.createEnvironment",
         "title": "Create Environment",
-        "category": "SuperAPI"
+        "category": "OpenAPI Puer"
       },
       {
-        "command": "superapi.selectEnvironment",
+        "command": "openapi-puer.selectEnvironment",
         "title": "Select Environment",
-        "category": "SuperAPI"
+        "category": "OpenAPI Puer"
       },
       {
-        "command": "superapi.editEnvironment",
+        "command": "openapi-puer.editEnvironment",
         "title": "Edit Environment",
-        "category": "SuperAPI"
+        "category": "OpenAPI Puer"
       },
       {
-        "command": "superapi.setApiFolder",
+        "command": "openapi-puer.setApiFolder",
         "title": "Set API Folder",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(folder-opened)"
       },
       {
-        "command": "superapi.addFolder",
+        "command": "openapi-puer.addFolder",
         "title": "Add Folder",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(new-folder)"
       },
       {
-        "command": "superapi.addFile",
+        "command": "openapi-puer.addFile",
         "title": "Add File",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(new-file)"
       },
       {
-        "command": "superapi.deleteItem",
+        "command": "openapi-puer.deleteItem",
         "title": "Delete",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(trash)"
       },
       {
-        "command": "superapi.viewSourceCode",
+        "command": "openapi-puer.viewSourceCode",
         "title": "View Source Code",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "superapi.addEndpoint",
+        "command": "openapi-puer.addEndpoint",
         "title": "Add Endpoint",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(add)"
       },
       {
-        "command": "superapi.addModel",
+        "command": "openapi-puer.addModel",
         "title": "Add Schema",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(symbol-class)"
       },
       {
-        "command": "superapi.addServer",
+        "command": "openapi-puer.addServer",
         "title": "Add Server",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(server)"
       },
       {
-        "command": "superapi.openInNewTab",
+        "command": "openapi-puer.openInNewTab",
         "title": "Open in New Tab",
-        "category": "SuperAPI",
+        "category": "OpenAPI Puer",
         "icon": "$(split-horizontal)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "superapi.addFolder",
-          "when": "view == superapi.apiExplorer",
+          "command": "openapi-puer.addFolder",
+          "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@1"
         },
         {
-          "command": "superapi.addFile",
-          "when": "view == superapi.apiExplorer",
+          "command": "openapi-puer.addFile",
+          "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@2"
         },
         {
-          "command": "superapi.refresh",
-          "when": "view == superapi.apiExplorer",
+          "command": "openapi-puer.refresh",
+          "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@3"
         },
         {
-          "command": "superapi.toggleGroupByTags",
-          "when": "view == superapi.apiExplorer",
+          "command": "openapi-puer.toggleGroupByTags",
+          "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@4"
         },
         {
-          "command": "superapi.setApiFolder",
-          "when": "view == superapi.apiExplorer",
+          "command": "openapi-puer.setApiFolder",
+          "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@5"
         }
       ],
       "view/item/context": [
         {
-          "command": "superapi.addFolder",
-          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "command": "openapi-puer.addFolder",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
           "group": "1_add@1"
         },
         {
-          "command": "superapi.addFile",
-          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "command": "openapi-puer.addFile",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
           "group": "1_add@2"
         },
         {
-          "command": "superapi.deleteItem",
-          "when": "view == superapi.apiExplorer && viewItem == folder",
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
           "group": "2_delete"
         },
         {
-          "command": "superapi.deleteItem",
-          "when": "view == superapi.apiExplorer && viewItem == file",
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
           "group": "2_delete"
         },
         {
-          "command": "superapi.viewSourceCode",
-          "when": "view == superapi.apiExplorer && viewItem == file",
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
           "group": "1_actions@1"
         },
         {
-          "command": "superapi.addEndpoint",
-          "when": "view == superapi.apiExplorer && viewItem == file",
+          "command": "openapi-puer.addEndpoint",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
           "group": "1_actions@2"
         },
 {
-          "command": "superapi.viewSourceCode",
-          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
           "group": "1_actions@1"
         },
         {
-          "command": "superapi.deleteItem",
-          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
           "group": "2_delete"
         },
         {
-          "command": "superapi.viewSourceCode",
-          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "1_actions@1"
         },
         {
-          "command": "superapi.addModel",
-          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "command": "openapi-puer.addModel",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "1_actions@2"
         },
         {
-          "command": "superapi.deleteItem",
-          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "2_delete"
         },
         {
-          "command": "superapi.openInNewTab",
-          "when": "view == superapi.apiExplorer && viewItem == endpoint",
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == endpoint",
           "group": "0_open@1"
         },
         {
-          "command": "superapi.openInNewTab",
-          "when": "view == superapi.apiExplorer && viewItem == file-api",
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
           "group": "0_open@1"
         },
         {
-          "command": "superapi.openInNewTab",
-          "when": "view == superapi.apiExplorer && viewItem == file-schema",
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "0_open@1"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "superapi.apiExplorer",
-        "contents": "No API folder configured.\n[Set API Folder](command:superapi.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started."
+        "view": "openapi-puer.apiExplorer",
+        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started."
       }
     ]
   },
@@ -259,7 +259,7 @@
   "dependencies": {
     "@apidevtools/swagger-parser": "^10.1.1",
     "@vscode/webview-ui-toolkit": "^1.4.0",
-    "axios": "^1.13.4"
+    "axios": "^1.13.5"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

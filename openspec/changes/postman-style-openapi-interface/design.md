@@ -1,6 +1,6 @@
 ## Context
 
-SuperAPI is a VS Code extension (TypeScript, targeting VS Code 1.85+) currently in early development with minimal functionality. The goal is to transform it into a full-featured API development tool similar to Postman/Apifox, but integrated directly into VS Code.
+OpenAPI Puer is a VS Code extension (TypeScript, targeting VS Code 1.85+) currently in early development with minimal functionality. The goal is to transform it into a full-featured API development tool similar to Postman/Apifox, but integrated directly into VS Code.
 
 The extension will use:
 - **TreeView API** for the sidebar directory panel
@@ -72,12 +72,12 @@ The extension will use:
 
 **Decision**: Hybrid approach
 - **Workspace state** (`workspaceState`): Current environment selection, recent requests
-- **File-based** (`.superapi/` directory): Environment definitions, saved requests, request history
+- **File-based** (`.openapi-puer/` directory): Environment definitions, saved requests, request history
 
 **Rationale**:
 - Workspace state for ephemeral UI state
 - File-based for user data that should persist and be version-controllable
-- Users can commit `.superapi/environments.json` to share configs with team
+- Users can commit `.openapi-puer/environments.json` to share configs with team
 
 **Alternatives considered**:
 - Pure extension storage: Not portable, can't be version controlled

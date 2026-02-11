@@ -5,10 +5,10 @@ The system SHALL store environment configurations in a project-local file.
 
 #### Scenario: Environment file location
 - **WHEN** environments are created
-- **THEN** they SHALL be stored in `.superapi/environments.json` in the workspace root
+- **THEN** they SHALL be stored in `.openapi-puer/environments.json` in the workspace root
 
 #### Scenario: Create directory if missing
-- **WHEN** the `.superapi` directory does not exist
+- **WHEN** the `.openapi-puer` directory does not exist
 - **THEN** the system SHALL create it when saving the first environment
 
 #### Scenario: File format
@@ -19,7 +19,7 @@ The system SHALL store environment configurations in a project-local file.
 The system SHALL allow users to create named environments.
 
 #### Scenario: Create environment command
-- **WHEN** user executes "SuperAPI: Create Environment" command
+- **WHEN** user executes "OpenAPI Puer: Create Environment" command
 - **THEN** a dialog SHALL prompt for the environment name
 
 #### Scenario: Create from UI
@@ -98,7 +98,7 @@ The system SHALL provide secure handling for sensitive values.
 The system SHALL allow users to edit existing environments.
 
 #### Scenario: Edit environment command
-- **WHEN** user executes "SuperAPI: Edit Environment" command
+- **WHEN** user executes "OpenAPI Puer: Edit Environment" command
 - **THEN** the environment editor SHALL open for the active environment
 
 #### Scenario: Rename environment

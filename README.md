@@ -1,6 +1,6 @@
-# SuperAPI
+# OpenAPI Puer
 
-A VS Code extension for SuperAPI.
+A VS Code extension for OpenAPI Puer.
 
 ## Features
 

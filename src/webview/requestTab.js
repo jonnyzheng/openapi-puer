@@ -1,6 +1,6 @@
-// Request tab logic for SuperAPI webview
+// Request tab logic for OpenAPI Puer webview
 (function() {
-  const S = window.SuperAPI;
+  const S = window.OpenAPIPuer;
 
   S.setupRequestBuilder = function(endpoint, servers) {
     const escapeHtml = S.escapeHtml;

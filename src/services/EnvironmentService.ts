@@ -24,12 +24,12 @@ export class EnvironmentService {
 
   private getEnvironmentsFilePath(): string | undefined {
     if (!this.workspaceRoot) return undefined;
-    return path.join(this.workspaceRoot, '.superapi', 'environments.json');
+    return path.join(this.workspaceRoot, '.openapi-puer', 'environments.json');
   }
 
   private ensureDirectoryExists(): void {
     if (!this.workspaceRoot) return;
-    const dir = path.join(this.workspaceRoot, '.superapi');
+    const dir = path.join(this.workspaceRoot, '.openapi-puer');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -310,17 +310,17 @@ export class EnvironmentService {
   }
 
   private async getSecretValue(environmentId: string, key: string): Promise<string | undefined> {
-    const secretKey = `superapi.env.${environmentId}.${key}`;
+    const secretKey = `openapi-puer.env.${environmentId}.${key}`;
     return this.secretStorage.get(secretKey);
   }
 
   private async setSecretValue(environmentId: string, key: string, value: string): Promise<void> {
-    const secretKey = `superapi.env.${environmentId}.${key}`;
+    const secretKey = `openapi-puer.env.${environmentId}.${key}`;
     await this.secretStorage.store(secretKey, value);
   }
 
   private async deleteSecretValue(environmentId: string, key: string): Promise<void> {
-    const secretKey = `superapi.env.${environmentId}.${key}`;
+    const secretKey = `openapi-puer.env.${environmentId}.${key}`;
     await this.secretStorage.delete(secretKey);
   }
 

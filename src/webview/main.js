@@ -1,7 +1,7 @@
-// SuperAPI webview entry point
+// OpenAPI Puer webview entry point
 // Depends on: utils.js, detailsTab.js, requestTab.js, componentsTab.js, serversTab.js
 (function() {
-  const S = window.SuperAPI;
+  const S = window.OpenAPIPuer;
 
   // Save the initial endpoint HTML so it can be restored when switching back from api/schema views
   S._initialAppHtml = document.getElementById('app').innerHTML;

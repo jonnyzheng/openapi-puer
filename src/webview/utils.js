@@ -1,5 +1,5 @@
-// Shared state and utility functions for SuperAPI webview
-window.SuperAPI = {
+// Shared state and utility functions for OpenAPI Puer webview
+window.OpenAPIPuer = {
   vscode: acquireVsCodeApi(),
   currentEndpoint: null,
   currentServers: [],
@@ -13,7 +13,7 @@ window.SuperAPI = {
   currentFilePath: null,
 };
 
-window.SuperAPI.escapeHtml = function(str) {
+window.OpenAPIPuer.escapeHtml = function(str) {
   if (!str) return '';
   return String(str)
     .replace(/&/g, '&amp;')
@@ -23,7 +23,7 @@ window.SuperAPI.escapeHtml = function(str) {
     .replace(/'/g, '&#039;');
 };
 
-window.SuperAPI.getStatusClass = function(status) {
+window.OpenAPIPuer.getStatusClass = function(status) {
   const code = parseInt(status, 10);
   if (code >= 200 && code < 300) return 'status-2xx';
   if (code >= 300 && code < 400) return 'status-3xx';
@@ -32,18 +32,18 @@ window.SuperAPI.getStatusClass = function(status) {
   return '';
 };
 
-window.SuperAPI.formatSize = function(bytes) {
+window.OpenAPIPuer.formatSize = function(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-window.SuperAPI.capitalizeFirst = function(str) {
+window.OpenAPIPuer.capitalizeFirst = function(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
-window.SuperAPI.formatExampleValue = function(value) {
-  const escapeHtml = window.SuperAPI.escapeHtml;
+window.OpenAPIPuer.formatExampleValue = function(value) {
+  const escapeHtml = window.OpenAPIPuer.escapeHtml;
   if (value === null) return '<span class="json-null">null</span>';
   if (typeof value === 'string') return `<span class="json-string">"${escapeHtml(value)}"</span>`;
   if (typeof value === 'number') return `<span class="json-number">${value}</span>`;
@@ -53,12 +53,12 @@ window.SuperAPI.formatExampleValue = function(value) {
   return escapeHtml(String(value));
 };
 
-window.SuperAPI.renderSchemaValue = function(schema, indent, isLast) {
+window.OpenAPIPuer.renderSchemaValue = function(schema, indent, isLast) {
   if (indent === undefined) indent = 0;
   if (isLast === undefined) isLast = true;
-  const escapeHtml = window.SuperAPI.escapeHtml;
-  const renderSchemaValue = window.SuperAPI.renderSchemaValue;
-  const formatExampleValue = window.SuperAPI.formatExampleValue;
+  const escapeHtml = window.OpenAPIPuer.escapeHtml;
+  const renderSchemaValue = window.OpenAPIPuer.renderSchemaValue;
+  const formatExampleValue = window.OpenAPIPuer.formatExampleValue;
 
   if (!schema) return '<span class="json-null">null</span>';
 
@@ -103,11 +103,11 @@ window.SuperAPI.renderSchemaValue = function(schema, indent, isLast) {
   return `${refBadge}<span class="json-type">${type}</span>${format}${example}${enumValues}`;
 };
 
-window.SuperAPI.renderSchema = function(schema, indent, isLast) {
+window.OpenAPIPuer.renderSchema = function(schema, indent, isLast) {
   if (indent === undefined) indent = 0;
   if (isLast === undefined) isLast = true;
-  const escapeHtml = window.SuperAPI.escapeHtml;
-  const renderSchemaValue = window.SuperAPI.renderSchemaValue;
+  const escapeHtml = window.OpenAPIPuer.escapeHtml;
+  const renderSchemaValue = window.OpenAPIPuer.renderSchemaValue;
 
   if (!schema) return '';
 
@@ -145,8 +145,8 @@ window.SuperAPI.renderSchema = function(schema, indent, isLast) {
   return html;
 };
 
-window.SuperAPI.generateSampleFromSchema = function(schema) {
-  const generateSampleFromSchema = window.SuperAPI.generateSampleFromSchema;
+window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
+  const generateSampleFromSchema = window.OpenAPIPuer.generateSampleFromSchema;
   if (!schema) return null;
 
   if (schema.example !== undefined) return schema.example;
@@ -180,8 +180,8 @@ window.SuperAPI.generateSampleFromSchema = function(schema) {
   }
 };
 
-window.SuperAPI.highlightJson = function(jsonStr) {
-  var escapeHtml = window.SuperAPI.escapeHtml;
+window.OpenAPIPuer.highlightJson = function(jsonStr) {
+  var escapeHtml = window.OpenAPIPuer.escapeHtml;
   // Tokenize and highlight JSON string
   return jsonStr.replace(
     /("(?:\\.|[^"\\])*")\s*(:)?|(\b(?:true|false)\b)|(\bnull\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|([{}\[\]])|([,:])/g,
@@ -208,8 +208,8 @@ window.SuperAPI.highlightJson = function(jsonStr) {
   );
 };
 
-window.SuperAPI.showDeleteConfirmDialog = function(paramName, onConfirm) {
-  const escapeHtml = window.SuperAPI.escapeHtml;
+window.OpenAPIPuer.showDeleteConfirmDialog = function(paramName, onConfirm) {
+  const escapeHtml = window.OpenAPIPuer.escapeHtml;
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `

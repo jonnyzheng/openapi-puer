@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SuperAPI is a VS Code extension built with TypeScript. It provides a GUI interface for OpenAPI specification files, allowing users to visualize and edit api items within GUI.
+OpenAPI Puer is a VS Code extension built with TypeScript. It provides a GUI interface for OpenAPI specification files, allowing users to visualize and edit api items within GUI.
 
 ## Commands
 
@@ -62,10 +62,10 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 - Use TypeScript for all source code.
 - Follow VS Code extension development best practices.
-- Use the same ui design for webview as the one in the current version of SuperAPI.
+- Use the same ui design for webview as the one in the current version of OpenAPI Puer.
 - Keep the code modular and maintainable, with clear separation of concerns between different services and components.
 - Write unit tests for critical services and integration tests for the extension as a whole.
-- keep the same behavior of the edit,delete, add operations for api items in the GUI of SuperAPI.
+- keep the same behavior of the edit,delete, add operations for api items in the GUI of OpenAPI Puer.
 
 ## UI Rules
 

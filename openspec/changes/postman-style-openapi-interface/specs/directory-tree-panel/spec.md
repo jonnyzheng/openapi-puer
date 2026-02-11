@@ -5,10 +5,10 @@ The system SHALL display a tree view in the VS Code sidebar showing all discover
 
 #### Scenario: Show in activity bar
 - **WHEN** the extension is activated
-- **THEN** a "SuperAPI" icon SHALL appear in the VS Code activity bar
+- **THEN** a "OpenAPI Puer" icon SHALL appear in the VS Code activity bar
 
 #### Scenario: Display tree view panel
-- **WHEN** user clicks the SuperAPI activity bar icon
+- **WHEN** user clicks the OpenAPI Puer activity bar icon
 - **THEN** a sidebar panel SHALL open showing the API directory tree
 
 ### Requirement: Organize tree by files
@@ -71,5 +71,5 @@ The system SHALL provide a way to manually refresh the tree view.
 - **THEN** the system SHALL re-scan the directory and re-parse all OpenAPI files
 
 #### Scenario: Refresh command
-- **WHEN** user executes the "SuperAPI: Refresh" command
+- **WHEN** user executes the "OpenAPI Puer: Refresh" command
 - **THEN** the tree view SHALL refresh with updated content

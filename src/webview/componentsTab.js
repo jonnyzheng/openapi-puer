@@ -1,6 +1,6 @@
-// Components tab logic for SuperAPI webview
+// Components tab logic for OpenAPI Puer webview
 (function() {
-  const S = window.SuperAPI;
+  const S = window.OpenAPIPuer;
 
   S.renderComponents = function() {
     const escapeHtml = S.escapeHtml;

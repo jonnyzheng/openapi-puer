@@ -4,7 +4,7 @@ import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage, SchemaObject,
 
 export class ApiPanel {
   public static currentPanel: ApiPanel | undefined;
-  private static readonly viewType = 'superapi.apiPanel';
+  private static readonly viewType = 'openapi-puer.apiPanel';
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
@@ -64,6 +64,14 @@ export class ApiPanel {
     paramIn: string;
   }>();
   readonly onDeleteParameter = this.onDeleteParameterEmitter.event;
+
+  private onUpdateRequestBodyEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    requestBody: object | null;
+  }>();
+  readonly onUpdateRequestBody = this.onUpdateRequestBodyEmitter.event;
 
   private onDisposeEmitter = new vscode.EventEmitter<void>();
   readonly onDispose = this.onDisposeEmitter.event;
@@ -181,7 +189,7 @@ export class ApiPanel {
 
     const panel = vscode.window.createWebviewPanel(
       ApiPanel.viewType,
-      'SuperAPI',
+      'OpenAPI Puer',
       column || vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -211,7 +219,7 @@ export class ApiPanel {
 
     const panel = vscode.window.createWebviewPanel(
       ApiPanel.viewType,
-      title || 'SuperAPI',
+      title || 'OpenAPI Puer',
       column || vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -375,6 +383,14 @@ export class ApiPanel {
           method: string;
         });
         break;
+      case 'updateRequestBody':
+        this.onUpdateRequestBodyEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          requestBody: object | null;
+        });
+        break;
       case 'addServer':
         this.onAddServerEmitter.fire(message.payload as {
           filePath: string;
@@ -534,7 +550,7 @@ export class ApiPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <link href="${styleUri}" rel="stylesheet">
-  <title>SuperAPI</title>
+  <title>OpenAPI Puer</title>
 </head>
 <body>
   <div id="app">
@@ -565,14 +581,17 @@ export class ApiPanel {
             <div id="metadata-content" class="section-content"></div>
           </section>
 
-          <section id="parameters-section" class="section">
-            <h3 class="section-header collapsible">Parameters</h3>
-            <div id="parameters-content" class="section-content"></div>
-          </section>
-
-          <section id="request-body-section" class="section">
-            <h3 class="section-header collapsible">Request Body</h3>
-            <div id="request-body-content" class="section-content"></div>
+          <section id="definition-section" class="section">
+            <div id="definition-tabs" class="definition-tabs">
+              <button class="definition-tab-btn active" data-def-tab="params">Params</button>
+              <button class="definition-tab-btn" data-def-tab="body">Body</button>
+              <button class="definition-tab-btn" data-def-tab="headers">Headers</button>
+              <button class="definition-tab-btn" data-def-tab="cookies">Cookies</button>
+            </div>
+            <div id="def-params-tab" class="definition-tab-content active"></div>
+            <div id="def-body-tab" class="definition-tab-content"></div>
+            <div id="def-headers-tab" class="definition-tab-content"></div>
+            <div id="def-cookies-tab" class="definition-tab-content"></div>
           </section>
 
           <section id="responses-section" class="section">
@@ -730,6 +749,7 @@ export class ApiPanel {
     this.onUpdateParameterEmitter.dispose();
     this.onAddParameterEmitter.dispose();
     this.onDeleteParameterEmitter.dispose();
+    this.onUpdateRequestBodyEmitter.dispose();
     this.onUpdatePathEmitter.dispose();
     this.onAddServerEmitter.dispose();
     this.onUpdateServerEmitter.dispose();

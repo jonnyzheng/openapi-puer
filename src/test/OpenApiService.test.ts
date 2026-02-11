@@ -11,7 +11,7 @@ suite('OpenApiService Test Suite', () => {
 
   setup(() => {
     service = new OpenApiService();
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'superapi-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openapi-puer-test-'));
     testFilePath = path.join(tempDir, 'test-api.json');
   });
 

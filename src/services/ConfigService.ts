@@ -9,7 +9,7 @@ export class ConfigService {
   readonly onFileChange = this.onFileChangeEmitter.event;
 
   getApiDirectory(): string {
-    const config = vscode.workspace.getConfiguration('superapi');
+    const config = vscode.workspace.getConfiguration('openapi-puer');
     const configuredPath = config.get<string>('apiDirectory', '');
 
     if (configuredPath) {
@@ -27,13 +27,13 @@ export class ConfigService {
   }
 
   isApiDirectoryConfigured(): boolean {
-    const config = vscode.workspace.getConfiguration('superapi');
+    const config = vscode.workspace.getConfiguration('openapi-puer');
     const configuredPath = config.get<string>('apiDirectory', '');
     return configuredPath !== '';
   }
 
   async setApiDirectory(dirPath: string): Promise<void> {
-    const config = vscode.workspace.getConfiguration('superapi');
+    const config = vscode.workspace.getConfiguration('openapi-puer');
     const workspaceRoot = this.getWorkspaceRoot();
 
     // Store as relative path if within workspace
@@ -109,7 +109,7 @@ export class ConfigService {
 
   onConfigurationChange(callback: () => void): vscode.Disposable {
     return vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('superapi.apiDirectory')) {
+      if (e.affectsConfiguration('openapi-puer.apiDirectory')) {
         callback();
       }
     });

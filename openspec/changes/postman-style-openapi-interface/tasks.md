@@ -3,7 +3,7 @@
 - [x] 1.1 Add dependencies to package.json: `@apidevtools/swagger-parser`, `axios`, `@vscode/webview-ui-toolkit`
 - [x] 1.2 Create directory structure: `src/providers/`, `src/panels/`, `src/services/`, `src/models/`, `src/webview/`
 - [x] 1.3 Create TypeScript interfaces in `src/models/types.ts` for OpenAPI endpoints, parameters, and responses
-- [x] 1.4 Add extension configuration schema to package.json for `superapi.apiDirectory` setting
+- [x] 1.4 Add extension configuration schema to package.json for `openapi-puer.apiDirectory` setting
 
 ## 2. OpenAPI Parser Service
 
@@ -16,7 +16,7 @@
 
 ## 3. Directory Configuration
 
-- [x] 3.1 Register `superapi.apiDirectory` configuration in package.json contributes.configuration
+- [x] 3.1 Register `openapi-puer.apiDirectory` configuration in package.json contributes.configuration
 - [x] 3.2 Create configuration reader utility to get and validate the API directory path
 - [x] 3.3 Implement directory validation with error notification for invalid paths
 - [x] 3.4 Set up FileSystemWatcher to monitor configured directory for changes
@@ -88,7 +88,7 @@
 ## 10. Environment Manager
 
 - [x] 10.1 Create `src/services/EnvironmentService.ts` for environment management
-- [x] 10.2 Implement environment storage in `.superapi/environments.json`
+- [x] 10.2 Implement environment storage in `.openapi-puer/environments.json`
 - [x] 10.3 Implement CRUD operations for environments (create, read, update, delete)
 - [x] 10.4 Implement variable storage with key, value, description fields
 - [x] 10.5 Add environment selector dropdown in webview header
@@ -102,7 +102,7 @@
 - [x] 11.1 Update `src/extension.ts` to register all commands
 - [x] 11.2 Register tree view provider on activation
 - [x] 11.3 Initialize services (OpenApiService, EnvironmentService) on activation
-- [x] 11.4 Add commands: SuperAPI.refresh, SuperAPI.createEnvironment, SuperAPI.editEnvironment
+- [x] 11.4 Add commands: OpenAPI Puer.refresh, OpenAPI Puer.createEnvironment, OpenAPI Puer.editEnvironment
 - [x] 11.5 Add status bar item showing active environment
 - [x] 11.6 Implement proper disposal of watchers and webviews on deactivation
 

@@ -5,7 +5,7 @@ import { ApiFile, ApiEndpoint, HttpMethod } from '../models/types';
 
 export type TreeItemType = 'folder' | 'file' | 'tag' | 'endpoint';
 
-export const SUPERAPI_TREE_MIME_TYPE = 'application/vnd.code.tree.superapi';
+export const OPENAPI_PUER_TREE_MIME_TYPE = 'application/vnd.code.tree.openapi-puer';
 
 interface FolderNode {
   name: string;
@@ -227,14 +227,14 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
       if (isApiJson) {
         item.contextValue = 'file-api';
         item.command = {
-          command: 'superapi.openApiFile',
+          command: 'openapi-puer.openApiFile',
           title: 'Open API File',
           arguments: [file]
         };
       } else if (isSchemaFile) {
         item.contextValue = 'file-schema';
         item.command = {
-          command: 'superapi.openSchemaFile',
+          command: 'openapi-puer.openSchemaFile',
           title: 'Open Schema File',
           arguments: [file]
         };
@@ -305,7 +305,7 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
       item.tooltip = `${endpoint.method.toUpperCase()} ${endpoint.path}${endpoint.description ? '\n\n' + endpoint.description : ''}`;
       item.iconPath = this.getMethodIcon(endpoint.method);
       item.command = {
-        command: 'superapi.openEndpoint',
+        command: 'openapi-puer.openEndpoint',
         title: 'Open Endpoint',
         arguments: [endpoint]
       };
@@ -339,8 +339,8 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 }
 
 export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropController<ApiTreeItem> {
-  readonly dropMimeTypes = [SUPERAPI_TREE_MIME_TYPE];
-  readonly dragMimeTypes = [SUPERAPI_TREE_MIME_TYPE];
+  readonly dropMimeTypes = [OPENAPI_PUER_TREE_MIME_TYPE];
+  readonly dragMimeTypes = [OPENAPI_PUER_TREE_MIME_TYPE];
 
   private onDidMoveFile: ((sourcePath: string, targetPath: string) => Promise<void>) | undefined;
 
@@ -363,7 +363,7 @@ export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropContr
         type: item.itemType,
         filePath: item.resourceUri!.fsPath
       }));
-      dataTransfer.set(SUPERAPI_TREE_MIME_TYPE, new vscode.DataTransferItem(dragData));
+      dataTransfer.set(OPENAPI_PUER_TREE_MIME_TYPE, new vscode.DataTransferItem(dragData));
     }
   }
 
@@ -372,7 +372,7 @@ export class ApiTreeDragAndDropController implements vscode.TreeDragAndDropContr
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken
   ): Promise<void> {
-    const transferItem = dataTransfer.get(SUPERAPI_TREE_MIME_TYPE);
+    const transferItem = dataTransfer.get(OPENAPI_PUER_TREE_MIME_TYPE);
     if (!transferItem) {
       return;
     }

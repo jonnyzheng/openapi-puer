@@ -24,9 +24,26 @@ interface CacheEntry {
 export class OpenApiService {
   private cache: Map<string, CacheEntry> = new Map();
   private outputChannel: vscode.OutputChannel;
+  private writeLocks: Map<string, Promise<void>> = new Map();
 
   constructor() {
-    this.outputChannel = vscode.window.createOutputChannel('SuperAPI');
+    this.outputChannel = vscode.window.createOutputChannel('OpenAPI Puer');
+  }
+
+  private async withWriteLock<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+    const existing = this.writeLocks.get(filePath) || Promise.resolve();
+    let resolve: () => void;
+    const newLock = new Promise<void>(r => { resolve = r; });
+    this.writeLocks.set(filePath, newLock);
+    await existing;
+    try {
+      return await fn();
+    } finally {
+      resolve!();
+      if (this.writeLocks.get(filePath) === newLock) {
+        this.writeLocks.delete(filePath);
+      }
+    }
   }
 
   async parseFile(filePath: string): Promise<ApiFile | null> {
@@ -643,7 +660,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       // Clear cache for this file so it gets re-parsed
       this.removeFromCache(filePath);
@@ -715,7 +732,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       // Clear cache for this file so it gets re-parsed
       this.removeFromCache(filePath);
@@ -823,7 +840,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       // Clear cache for this file so it gets re-parsed
       this.removeFromCache(filePath);
@@ -889,7 +906,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       // Clear cache for this file so it gets re-parsed
       this.removeFromCache(filePath);
@@ -898,6 +915,45 @@ export class OpenApiService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Error deleting parameter: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async updateRequestBody(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    requestBody: object | null
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const pathObj = spec.paths?.[endpointPath];
+      if (!pathObj) {
+        return { success: false, message: `Path ${endpointPath} not found in spec` };
+      }
+
+      const operation = pathObj[method.toLowerCase()];
+      if (!operation) {
+        return { success: false, message: `Method ${method} not found on path ${endpointPath}` };
+      }
+
+      if (requestBody === null) {
+        delete operation.requestBody;
+      } else {
+        operation.requestBody = requestBody;
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating request body: ${message}`);
       return { success: false, message };
     }
   }
@@ -952,7 +1008,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       // Clear cache for this file so it gets re-parsed
       this.removeFromCache(filePath);
@@ -993,7 +1049,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1034,7 +1090,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1068,7 +1124,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1103,7 +1159,7 @@ export class OpenApiService {
       }
 
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1158,7 +1214,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1218,7 +1274,7 @@ export class OpenApiService {
 
       // Write the updated spec back to file
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
       this.removeFromCache(filePath);
 
@@ -1296,7 +1352,7 @@ export class OpenApiService {
       delete schemas[schemaName];
 
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
       this.removeFromCache(filePath);
 
       return { success: true };
@@ -1358,7 +1414,7 @@ export class OpenApiService {
       }
 
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
       this.removeFromCache(filePath);
 
       return { success: true };
@@ -1400,7 +1456,7 @@ export class OpenApiService {
       }
 
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
       this.removeFromCache(filePath);
 
       return { success: true };
@@ -1504,7 +1560,7 @@ export class OpenApiService {
       }
 
       const updatedContent = JSON.stringify(spec, null, 2);
-      await fs.promises.writeFile(filePath, updatedContent, 'utf-8');
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
       this.removeFromCache(filePath);
 
       return { success: true };

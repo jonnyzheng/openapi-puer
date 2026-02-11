@@ -1,6 +1,6 @@
-// Details tab logic for SuperAPI webview
+// Details tab logic for OpenAPI Puer webview
 (function() {
-  const S = window.SuperAPI;
+  const S = window.OpenAPIPuer;
 
   S.showSaveStatus = function(success, message) {
     const notification = document.createElement('div');
@@ -444,6 +444,424 @@
     return container;
   };
 
+  // Create a parameter table filtered by location(s)
+  S.createFilteredParameterTable = function(locations, showLocation, defaultLocation) {
+    if (!S.currentEndpoint) return document.createElement('div');
+
+    var allParams = S.currentEndpoint.parameters || [];
+    var container = document.createElement('div');
+
+    var table = document.createElement('table');
+    table.className = 'params-table editable-table' + (showLocation ? '' : ' no-location');
+
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Name</th><th>Location</th><th>Type</th><th>Required</th><th>Description</th><th></th></tr>';
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    allParams.forEach(function(param, index) {
+      if (locations.indexOf(param.in) !== -1) {
+        var row = S.createEditableParameterRow(param, index);
+        tbody.appendChild(row);
+      }
+    });
+    table.appendChild(tbody);
+
+    container.appendChild(table);
+
+    var addRow = document.createElement('div');
+    addRow.className = 'add-param-row';
+    var addBtn = document.createElement('button');
+    addBtn.className = 'add-param-btn';
+    addBtn.textContent = '+ Add Parameter';
+    addBtn.addEventListener('click', function() {
+      S.showAddParameterDialog(defaultLocation, showLocation);
+    });
+    addRow.appendChild(addBtn);
+    container.appendChild(addRow);
+
+    return container;
+  };
+
+  // Render the definition sub-tabs (Params, Body, Headers, Cookies)
+  // If onlyParams is true, skip re-rendering the Body tab (avoids unnecessary side effects)
+  S.renderDefinitionTabs = function(onlyParams) {
+    if (!S.currentEndpoint) return;
+
+    var params = S.currentEndpoint.parameters || [];
+
+    // Count per location
+    var paramCount = 0, headerCount = 0, cookieCount = 0;
+    params.forEach(function(p) {
+      if (p.in === 'query' || p.in === 'path') paramCount++;
+      else if (p.in === 'header') headerCount++;
+      else if (p.in === 'cookie') cookieCount++;
+    });
+
+    // Update tab badges
+    var tabBtns = document.querySelectorAll('.definition-tab-btn');
+    tabBtns.forEach(function(btn) {
+      var tab = btn.dataset.defTab;
+      var label = '';
+      if (tab === 'params') label = 'Params' + (paramCount > 0 ? ' (' + paramCount + ')' : '');
+      else if (tab === 'body') label = 'Body';
+      else if (tab === 'headers') label = 'Headers' + (headerCount > 0 ? ' (' + headerCount + ')' : '');
+      else if (tab === 'cookies') label = 'Cookies' + (cookieCount > 0 ? ' (' + cookieCount + ')' : '');
+      btn.textContent = label;
+    });
+
+    // Render Params tab
+    var paramsTab = document.getElementById('def-params-tab');
+    paramsTab.innerHTML = '';
+    paramsTab.appendChild(S.createFilteredParameterTable(['query', 'path'], true, 'query'));
+
+    // Render Body tab (skip if only updating params)
+    if (!onlyParams) {
+      var bodyTab = document.getElementById('def-body-tab');
+      bodyTab.innerHTML = '';
+      S.renderBodyTab(bodyTab);
+    }
+
+    // Render Headers tab
+    var headersTab = document.getElementById('def-headers-tab');
+    headersTab.innerHTML = '';
+    headersTab.appendChild(S.createFilteredParameterTable(['header'], false, 'header'));
+
+    // Render Cookies tab
+    var cookiesTab = document.getElementById('def-cookies-tab');
+    cookiesTab.innerHTML = '';
+    cookiesTab.appendChild(S.createFilteredParameterTable(['cookie'], false, 'cookie'));
+  };
+
+  S.switchDefinitionTab = function(tabName) {
+    document.querySelectorAll('.definition-tab-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.defTab === tabName);
+    });
+    document.querySelectorAll('.definition-tab-content').forEach(function(content) {
+      content.classList.toggle('active', content.id === 'def-' + tabName + '-tab');
+    });
+    S._activeDefTab = tabName;
+  };
+
+  // ---- Body tab implementation ----
+
+  var BODY_TYPE_MAP = {
+    'none': null,
+    'form-data': 'multipart/form-data',
+    'json': 'application/json',
+    'raw': 'text/plain',
+    'x-www-form-urlencoded': 'application/x-www-form-urlencoded'
+  };
+
+  var CONTENT_TYPE_TO_BODY_TYPE = {};
+  Object.keys(BODY_TYPE_MAP).forEach(function(k) {
+    if (BODY_TYPE_MAP[k]) CONTENT_TYPE_TO_BODY_TYPE[BODY_TYPE_MAP[k]] = k;
+  });
+
+  S._currentBodyType = 'none';
+
+  function detectBodyType(endpoint) {
+    if (!endpoint.requestBody || !endpoint.requestBody.content) return 'none';
+    var keys = Object.keys(endpoint.requestBody.content);
+    if (keys.length === 0) return 'none';
+    var ct = keys[0];
+    return CONTENT_TYPE_TO_BODY_TYPE[ct] || 'json';
+  }
+
+  S.renderBodyTab = function(container) {
+    var endpoint = S.currentEndpoint;
+    S._currentBodyType = detectBodyType(endpoint);
+
+    // Type selector
+    var selector = document.createElement('div');
+    selector.className = 'body-type-selector';
+    var types = ['none', 'form-data', 'json', 'raw', 'x-www-form-urlencoded'];
+    types.forEach(function(type) {
+      var btn = document.createElement('button');
+      btn.className = 'body-type-btn' + (type === S._currentBodyType ? ' active' : '');
+      btn.textContent = type;
+      btn.addEventListener('click', function() {
+        S._currentBodyType = type;
+        selector.querySelectorAll('.body-type-btn').forEach(function(b) {
+          b.classList.toggle('active', b.textContent === type);
+        });
+        S._renderBodyContent(editorArea, type, true);
+      });
+      selector.appendChild(btn);
+    });
+    container.appendChild(selector);
+
+    // Editor area
+    var editorArea = document.createElement('div');
+    editorArea.className = 'body-editor-content';
+    container.appendChild(editorArea);
+
+    S._renderBodyContent(editorArea, S._currentBodyType);
+  };
+
+  S._renderBodyContent = function(container, type, save) {
+    container.innerHTML = '';
+    var endpoint = S.currentEndpoint;
+
+    if (type === 'none') {
+      container.innerHTML = '<div class="no-content">This request does not have a body</div>';
+      if (save) {
+        S._saveRequestBody(null);
+      }
+      return;
+    }
+
+    var contentType = BODY_TYPE_MAP[type];
+    var existingMedia = endpoint.requestBody && endpoint.requestBody.content && endpoint.requestBody.content[contentType];
+
+    if (type === 'json') {
+      S._renderJsonBodyEditor(container, existingMedia);
+    } else if (type === 'raw') {
+      S._renderRawBodyEditor(container, existingMedia);
+    } else if (type === 'form-data') {
+      S._renderKvBodyEditor(container, existingMedia, true);
+    } else if (type === 'x-www-form-urlencoded') {
+      S._renderKvBodyEditor(container, existingMedia, false);
+    }
+  };
+
+  S._saveRequestBody = function(requestBody) {
+    if (!S.currentEndpoint) return;
+    S.currentEndpoint.requestBody = requestBody;
+    S.vscode.postMessage({
+      type: 'updateRequestBody',
+      payload: {
+        filePath: S.currentEndpoint.filePath,
+        path: S.currentEndpoint.path,
+        method: S.currentEndpoint.method,
+        requestBody: requestBody
+      }
+    });
+  };
+
+  S._buildKvRequestBody = function(contentType, rows) {
+    var properties = {};
+    var required = [];
+    rows.forEach(function(r) {
+      if (!r.name) return;
+      var prop = { type: r.type || 'string' };
+      if (r.description) prop.description = r.description;
+      if (r.format) prop.format = r.format;
+      properties[r.name] = prop;
+      if (r.required) required.push(r.name);
+    });
+    var schema = { type: 'object', properties: properties };
+    if (required.length > 0) schema.required = required;
+    var content = {};
+    content[contentType] = { schema: schema };
+    return { content: content };
+  };
+
+  // JSON body editor
+  S._renderJsonBodyEditor = function(container, existingMedia) {
+    var schema = existingMedia && existingMedia.schema ? existingMedia.schema : {};
+    var escapeHtml = S.escapeHtml;
+    var renderSchema = S.renderSchema;
+
+    // Schema viewer (read-only)
+    if (schema && Object.keys(schema).length > 0 && !schema.$ref) {
+      var viewerLabel = document.createElement('div');
+      viewerLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
+      viewerLabel.textContent = 'Schema Preview';
+      container.appendChild(viewerLabel);
+
+      var viewer = document.createElement('div');
+      viewer.className = 'schema-viewer';
+      viewer.innerHTML = renderSchema(schema);
+      container.appendChild(viewer);
+
+      var spacer = document.createElement('div');
+      spacer.style.height = '12px';
+      container.appendChild(spacer);
+    }
+
+    var editorLabel = document.createElement('div');
+    editorLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
+    editorLabel.textContent = 'Schema JSON';
+    container.appendChild(editorLabel);
+
+    var textarea = document.createElement('textarea');
+    textarea.className = 'body-editor-area';
+    textarea.value = JSON.stringify(schema, null, 2);
+    textarea.placeholder = '{\n  "type": "object",\n  "properties": {}\n}';
+    container.appendChild(textarea);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'body-save-btn';
+    saveBtn.textContent = 'Save Schema';
+    saveBtn.addEventListener('click', function() {
+      try {
+        var parsed = JSON.parse(textarea.value);
+        var content = {};
+        content['application/json'] = { schema: parsed };
+        S._saveRequestBody({ content: content });
+      } catch (e) {
+        alert('Invalid JSON: ' + e.message);
+      }
+    });
+    container.appendChild(saveBtn);
+  };
+
+  // Raw text body editor
+  S._renderRawBodyEditor = function(container, existingMedia) {
+    var textarea = document.createElement('textarea');
+    textarea.className = 'body-editor-area';
+    textarea.placeholder = 'Enter raw body content...';
+    // For raw, we store example in the media object
+    if (existingMedia && existingMedia.example) {
+      textarea.value = typeof existingMedia.example === 'string' ? existingMedia.example : JSON.stringify(existingMedia.example);
+    }
+    container.appendChild(textarea);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'body-save-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', function() {
+      var content = {};
+      content['text/plain'] = {};
+      if (textarea.value.trim()) {
+        content['text/plain'].example = textarea.value;
+      }
+      S._saveRequestBody({ content: content });
+    });
+    container.appendChild(saveBtn);
+  };
+
+  // Key-value body editor (form-data / x-www-form-urlencoded)
+  S._renderKvBodyEditor = function(container, existingMedia, isFormData) {
+    var contentType = isFormData ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+
+    // Extract existing fields from schema properties
+    var rows = [];
+    if (existingMedia && existingMedia.schema && existingMedia.schema.properties) {
+      var props = existingMedia.schema.properties;
+      var requiredList = existingMedia.schema.required || [];
+      Object.keys(props).forEach(function(name) {
+        var p = props[name];
+        rows.push({
+          name: name,
+          type: (p.format === 'binary') ? 'file' : (p.type || 'string'),
+          description: p.description || '',
+          required: requiredList.indexOf(name) !== -1
+        });
+      });
+    }
+
+    var table = document.createElement('table');
+    table.className = 'body-kv-table';
+
+    var thead = document.createElement('thead');
+    var headerHtml = '<tr><th>Name</th>';
+    if (isFormData) headerHtml += '<th>Type</th>';
+    headerHtml += '<th>Required</th><th>Description</th><th></th></tr>';
+    thead.innerHTML = headerHtml;
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+
+    function addKvRow(data) {
+      var tr = document.createElement('tr');
+
+      // Name
+      var tdName = document.createElement('td');
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = data.name || '';
+      nameInput.placeholder = 'field name';
+      tdName.appendChild(nameInput);
+      tr.appendChild(tdName);
+
+      // Type (form-data only)
+      var typeSelect;
+      if (isFormData) {
+        var tdType = document.createElement('td');
+        typeSelect = document.createElement('select');
+        ['string', 'integer', 'number', 'boolean', 'file'].forEach(function(t) {
+          var opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t;
+          if (t === (data.type || 'string')) opt.selected = true;
+          typeSelect.appendChild(opt);
+        });
+        tdType.appendChild(typeSelect);
+        tr.appendChild(tdType);
+      }
+
+      // Required
+      var tdReq = document.createElement('td');
+      var reqCheckbox = document.createElement('input');
+      reqCheckbox.type = 'checkbox';
+      reqCheckbox.checked = data.required || false;
+      tdReq.appendChild(reqCheckbox);
+      tr.appendChild(tdReq);
+
+      // Description
+      var tdDesc = document.createElement('td');
+      var descInput = document.createElement('input');
+      descInput.type = 'text';
+      descInput.value = data.description || '';
+      descInput.placeholder = 'description';
+      tdDesc.appendChild(descInput);
+      tr.appendChild(tdDesc);
+
+      // Delete
+      var tdDel = document.createElement('td');
+      var delBtn = document.createElement('button');
+      delBtn.className = 'delete-field-btn';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function() {
+        tr.remove();
+      });
+      tdDel.appendChild(delBtn);
+      tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+    }
+
+    rows.forEach(function(r) { addKvRow(r); });
+
+    container.appendChild(table);
+
+    // Add field button
+    var addRow = document.createElement('div');
+    addRow.className = 'add-param-row';
+    var addBtn = document.createElement('button');
+    addBtn.className = 'add-param-btn';
+    addBtn.textContent = '+ Add Field';
+    addBtn.addEventListener('click', function() {
+      addKvRow({ name: '', type: 'string', description: '', required: false });
+    });
+    addRow.appendChild(addBtn);
+    container.appendChild(addRow);
+
+    // Save button
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'body-save-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', function() {
+      var kvRows = [];
+      tbody.querySelectorAll('tr').forEach(function(tr) {
+        var inputs = tr.querySelectorAll('input');
+        var selects = tr.querySelectorAll('select');
+        var name = inputs[0].value.trim();
+        if (!name) return;
+        var type = isFormData ? selects[0].value : 'string';
+        var required = isFormData ? inputs[1].checked : inputs[1].checked;
+        var description = isFormData ? inputs[2].value.trim() : inputs[2].value.trim();
+        var format = (type === 'file') ? 'binary' : undefined;
+        kvRows.push({ name: name, type: type === 'file' ? 'string' : type, description: description, required: required, format: format });
+      });
+      S._saveRequestBody(S._buildKvRequestBody(contentType, kvRows));
+    });
+    container.appendChild(saveBtn);
+  };
+
   S.saveParameter = function(paramIndex, field, value) {
     if (!S.currentEndpoint || !S.currentEndpoint.parameters[paramIndex]) return;
 
@@ -497,19 +915,28 @@
 
     S.currentEndpoint.parameters.splice(paramIndex, 1);
 
-    const parametersContent = document.getElementById('parameters-content');
-    const parametersSection = document.getElementById('parameters-section');
-    parametersContent.innerHTML = '';
-    if (S.currentEndpoint.parameters.length > 0) {
-      parametersContent.appendChild(S.createEditableParametersTable(S.currentEndpoint.parameters));
-    } else {
-      parametersSection.style.display = 'none';
-    }
+    S.renderDefinitionTabs(true);
   };
 
-  S.showAddParameterDialog = function() {
+  S.showAddParameterDialog = function(defaultLocation, showLocation) {
+    if (defaultLocation === undefined) defaultLocation = 'query';
+    if (showLocation === undefined) showLocation = true;
+
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
+
+    const locationField = showLocation
+      ? `<div class="modal-field">
+          <label>Location</label>
+          <select id="new-param-in">
+            <option value="query"${defaultLocation === 'query' ? ' selected' : ''}>query</option>
+            <option value="path"${defaultLocation === 'path' ? ' selected' : ''}>path</option>
+            <option value="header"${defaultLocation === 'header' ? ' selected' : ''}>header</option>
+            <option value="cookie"${defaultLocation === 'cookie' ? ' selected' : ''}>cookie</option>
+          </select>
+        </div>`
+      : '';
+
     modal.innerHTML = `
       <div class="modal-dialog">
         <h4>Add Parameter</h4>
@@ -517,15 +944,7 @@
           <label>Name</label>
           <input type="text" id="new-param-name" placeholder="parameterName">
         </div>
-        <div class="modal-field">
-          <label>Location</label>
-          <select id="new-param-in">
-            <option value="query">query</option>
-            <option value="header">header</option>
-            <option value="path">path</option>
-            <option value="cookie">cookie</option>
-          </select>
-        </div>
+        ${locationField}
         <div class="modal-field">
           <label>Type</label>
           <select id="new-param-type">
@@ -574,7 +993,8 @@
 
     document.getElementById('confirm-add-param').addEventListener('click', () => {
       const name = document.getElementById('new-param-name').value.trim();
-      const paramIn = document.getElementById('new-param-in').value;
+      const paramInEl = document.getElementById('new-param-in');
+      const paramIn = paramInEl ? paramInEl.value : defaultLocation;
       const type = document.getElementById('new-param-type').value;
       const required = document.getElementById('new-param-required').checked;
       const description = document.getElementById('new-param-description').value.trim();
@@ -619,11 +1039,7 @@
       schema: { type: param.type }
     });
 
-    const parametersSection = document.getElementById('parameters-section');
-    const parametersContent = document.getElementById('parameters-content');
-    parametersSection.style.display = 'block';
-    parametersContent.innerHTML = '';
-    parametersContent.appendChild(S.createEditableParametersTable(S.currentEndpoint.parameters));
+    S.renderDefinitionTabs(true);
   };
 
   S.showEndpoint = function(endpoint, servers, components) {
@@ -725,39 +1141,30 @@
     metadataContent.appendChild(S.createTagsField('Tags', endpoint.tags || []));
     metadataContent.appendChild(S.createDeprecatedField(endpoint.deprecated));
 
-    const parametersSection = document.getElementById('parameters-section');
-    const parametersContent = document.getElementById('parameters-content');
-    if (endpoint.parameters && endpoint.parameters.length) {
-      parametersSection.style.display = 'block';
-      parametersContent.innerHTML = '';
-      parametersContent.appendChild(S.createEditableParametersTable(endpoint.parameters));
-    } else {
-      parametersSection.style.display = 'none';
+    if (!endpoint.parameters) {
+      endpoint.parameters = [];
     }
+
+    // Setup definition sub-tabs
+    S._activeDefTab = 'params';
+    document.querySelectorAll('.definition-tab-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.defTab === 'params');
+      // Remove old listeners by cloning
+      var newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      newBtn.addEventListener('click', function() {
+        S.switchDefinitionTab(newBtn.dataset.defTab);
+      });
+    });
+    document.querySelectorAll('.definition-tab-content').forEach(function(content) {
+      content.classList.toggle('active', content.id === 'def-params-tab');
+    });
+
+    S.renderDefinitionTabs();
 
     const escapeHtml = S.escapeHtml;
     const renderSchema = S.renderSchema;
     const getStatusClass = S.getStatusClass;
-
-    const requestBodySection = document.getElementById('request-body-section');
-    const requestBodyContent = document.getElementById('request-body-content');
-    if (endpoint.requestBody) {
-      requestBodySection.style.display = 'block';
-      let bodyHtml = '';
-      if (endpoint.requestBody.description) {
-        bodyHtml += `<p>${escapeHtml(endpoint.requestBody.description)}</p>`;
-      }
-      for (const [contentType, media] of Object.entries(endpoint.requestBody.content || {})) {
-        const componentName = media.schema?.$ref ? `<span class="component-badge">${escapeHtml(media.schema.$ref)}</span>` : '';
-        bodyHtml += `<h5>${escapeHtml(contentType)} ${componentName}</h5>`;
-        if (media.schema) {
-          bodyHtml += `<div class="schema-viewer">${renderSchema(media.schema)}</div>`;
-        }
-      }
-      requestBodyContent.innerHTML = bodyHtml || '<em>No schema defined</em>';
-    } else {
-      requestBodySection.style.display = 'none';
-    }
 
     const responsesSection = document.getElementById('responses-section');
     const responsesContent = document.getElementById('responses-content');

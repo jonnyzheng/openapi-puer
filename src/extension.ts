@@ -4,7 +4,7 @@ import { OpenApiService } from './services/OpenApiService';
 import { ConfigService } from './services/ConfigService';
 import { HttpService } from './services/HttpService';
 import { EnvironmentService } from './services/EnvironmentService';
-import { ApiTreeProvider, ApiTreeItem, ApiTreeDragAndDropController, SUPERAPI_TREE_MIME_TYPE } from './providers/ApiTreeProvider';
+import { ApiTreeProvider, ApiTreeItem, ApiTreeDragAndDropController, OPENAPI_PUER_TREE_MIME_TYPE } from './providers/ApiTreeProvider';
 import { ApiPanel } from './panels/ApiPanel';
 import { ApiEndpoint, ApiFile } from './models/types';
 
@@ -18,7 +18,7 @@ let apiFiles: ApiFile[] = [];
 let panelHandlersRegistered = false;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('SuperAPI extension is now active!');
+  console.log('OpenAPI Puer extension is now active!');
 
   // Initialize services
   openApiService = new OpenApiService();
@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Register tree view
-  const treeView = vscode.window.createTreeView('superapi.apiExplorer', {
+  const treeView = vscode.window.createTreeView('openapi-puer.apiExplorer', {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
     dragAndDropController: dragAndDropController
@@ -43,24 +43,24 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create status bar item for active environment
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.command = 'superapi.selectEnvironment';
+  statusBarItem.command = 'openapi-puer.selectEnvironment';
   updateStatusBar();
   statusBarItem.show();
 
   // Register commands
-  const refreshCommand = vscode.commands.registerCommand('superapi.refresh', async () => {
+  const refreshCommand = vscode.commands.registerCommand('openapi-puer.refresh', async () => {
     await refreshApiFiles();
   });
 
-  const openEndpointCommand = vscode.commands.registerCommand('superapi.openEndpoint', (endpoint: ApiEndpoint) => {
+  const openEndpointCommand = vscode.commands.registerCommand('openapi-puer.openEndpoint', (endpoint: ApiEndpoint) => {
     openEndpointPanel(context, endpoint);
   });
 
-  const toggleGroupByTagsCommand = vscode.commands.registerCommand('superapi.toggleGroupByTags', () => {
+  const toggleGroupByTagsCommand = vscode.commands.registerCommand('openapi-puer.toggleGroupByTags', () => {
     treeProvider.toggleGroupByTags();
   });
 
-  const createEnvironmentCommand = vscode.commands.registerCommand('superapi.createEnvironment', async () => {
+  const createEnvironmentCommand = vscode.commands.registerCommand('openapi-puer.createEnvironment', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'Enter environment name',
       placeHolder: 'e.g., Development, Staging, Production'
@@ -73,7 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const selectEnvironmentCommand = vscode.commands.registerCommand('superapi.selectEnvironment', async () => {
+  const selectEnvironmentCommand = vscode.commands.registerCommand('openapi-puer.selectEnvironment', async () => {
     const environments = environmentService.getEnvironments();
     const items: vscode.QuickPickItem[] = [
       { label: 'No Environment', description: 'Clear active environment' },
@@ -101,7 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const editEnvironmentCommand = vscode.commands.registerCommand('superapi.editEnvironment', async () => {
+  const editEnvironmentCommand = vscode.commands.registerCommand('openapi-puer.editEnvironment', async () => {
     const environments = environmentService.getEnvironments();
     if (environments.length === 0) {
       vscode.window.showInformationMessage('No environments to edit. Create one first.');
@@ -164,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const setApiFolderCommand = vscode.commands.registerCommand('superapi.setApiFolder', async () => {
+  const setApiFolderCommand = vscode.commands.registerCommand('openapi-puer.setApiFolder', async () => {
     const workspaceRoot = configService.getWorkspaceRoot();
     const defaultUri = workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined;
 
@@ -193,7 +193,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const addFolderCommand = vscode.commands.registerCommand('superapi.addFolder', async (item?: ApiTreeItem) => {
+  const addFolderCommand = vscode.commands.registerCommand('openapi-puer.addFolder', async (item?: ApiTreeItem) => {
     const apiDirectory = configService.getApiDirectory();
     if (!apiDirectory) {
       vscode.window.showErrorMessage('Please set an API folder first');
@@ -233,7 +233,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const addFileCommand = vscode.commands.registerCommand('superapi.addFile', async (item?: ApiTreeItem) => {
+  const addFileCommand = vscode.commands.registerCommand('openapi-puer.addFile', async (item?: ApiTreeItem) => {
     const apiDirectory = configService.getApiDirectory();
     if (!apiDirectory) {
       vscode.window.showErrorMessage('Please set an API folder first');
@@ -279,7 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const deleteItemCommand = vscode.commands.registerCommand('superapi.deleteItem', async (item?: ApiTreeItem) => {
+  const deleteItemCommand = vscode.commands.registerCommand('openapi-puer.deleteItem', async (item?: ApiTreeItem) => {
     if (!item) {
       return;
     }
@@ -319,7 +319,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const viewSourceCodeCommand = vscode.commands.registerCommand('superapi.viewSourceCode', async (item?: ApiTreeItem) => {
+  const viewSourceCodeCommand = vscode.commands.registerCommand('openapi-puer.viewSourceCode', async (item?: ApiTreeItem) => {
     if (!item || item.itemType !== 'file' || !item.apiFile) {
       return;
     }
@@ -333,7 +333,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const addEndpointCommand = vscode.commands.registerCommand('superapi.addEndpoint', async (item?: ApiTreeItem) => {
+  const addEndpointCommand = vscode.commands.registerCommand('openapi-puer.addEndpoint', async (item?: ApiTreeItem) => {
     if (!item || item.itemType !== 'file' || !item.apiFile) {
       return;
     }
@@ -384,7 +384,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const addModelCommand = vscode.commands.registerCommand('superapi.addModel', async (item?: ApiTreeItem) => {
+  const addModelCommand = vscode.commands.registerCommand('openapi-puer.addModel', async (item?: ApiTreeItem) => {
     if (!item || !item.apiFile) {
       return;
     }
@@ -397,7 +397,7 @@ export function activate(context: vscode.ExtensionContext) {
     panel.postMessagePublic({ type: 'showAddSchemaDialog' });
   });
 
-  const addServerCommand = vscode.commands.registerCommand('superapi.addServer', async (item?: ApiTreeItem) => {
+  const addServerCommand = vscode.commands.registerCommand('openapi-puer.addServer', async (item?: ApiTreeItem) => {
     if (!item || !item.apiFile) {
       return;
     }
@@ -466,15 +466,15 @@ export function activate(context: vscode.ExtensionContext) {
     panel.showAddServerDialog(filePath, servers);
   });
 
-  const openApiFileCommand = vscode.commands.registerCommand('superapi.openApiFile', (apiFile: ApiFile) => {
+  const openApiFileCommand = vscode.commands.registerCommand('openapi-puer.openApiFile', (apiFile: ApiFile) => {
     openApiFilePanel(context, apiFile);
   });
 
-  const openSchemaFileCommand = vscode.commands.registerCommand('superapi.openSchemaFile', (apiFile: ApiFile) => {
+  const openSchemaFileCommand = vscode.commands.registerCommand('openapi-puer.openSchemaFile', (apiFile: ApiFile) => {
     openSchemaFilePanel(context, apiFile);
   });
 
-  const openInNewTabCommand = vscode.commands.registerCommand('superapi.openInNewTab', (treeItem: ApiTreeItem) => {
+  const openInNewTabCommand = vscode.commands.registerCommand('openapi-puer.openInNewTab', (treeItem: ApiTreeItem) => {
     if (treeItem.itemType === 'endpoint' && treeItem.endpoint) {
       openEndpointInNewTab(context, treeItem.endpoint);
     } else if (treeItem.apiFile) {
@@ -672,6 +672,22 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
     panel.notifyOverviewSaved(result.success, result.message);
 
     // Refresh the tree view if save was successful
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle update request body
+  panel.onUpdateRequestBody(async (data) => {
+    const result = await openApiService.updateRequestBody(
+      data.filePath,
+      data.path,
+      data.method,
+      data.requestBody
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
     if (result.success) {
       await refreshApiFiles();
     }
@@ -972,6 +988,12 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onDeleteParameter(async (data) => {
     const result = await openApiService.deleteParameter(data.filePath, data.path, data.method, data.paramName, data.paramIn);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdateRequestBody(async (data) => {
+    const result = await openApiService.updateRequestBody(data.filePath, data.path, data.method, data.requestBody);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) { await refreshApiFiles(); }
   });
