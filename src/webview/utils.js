@@ -181,31 +181,12 @@ window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
 };
 
 window.OpenAPIPuer.highlightJson = function(jsonStr) {
-  var escapeHtml = window.OpenAPIPuer.escapeHtml;
-  // Tokenize and highlight JSON string
-  return jsonStr.replace(
-    /("(?:\\.|[^"\\])*")\s*(:)?|(\b(?:true|false)\b)|(\bnull\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|([{}\[\]])|([,:])/g,
-    function(match, str, colon, bool, nul, num, brace, punct) {
-      if (str) {
-        var escaped = escapeHtml(str);
-        if (colon) {
-          return '<span class="json-key">' + escaped + '</span><span class="json-colon">:</span>';
-        }
-        return '<span class="json-string">' + escaped + '</span>';
-      }
-      if (bool) return '<span class="json-boolean">' + bool + '</span>';
-      if (nul) return '<span class="json-null">' + nul + '</span>';
-      if (num) return '<span class="json-number">' + num + '</span>';
-      if (brace) {
-        var cls = (brace === '{' || brace === '}') ? 'json-brace' : 'json-bracket';
-        return '<span class="' + cls + '">' + brace + '</span>';
-      }
-      if (punct) {
-        return '<span class="json-comma">' + punct + '</span>';
-      }
-      return match;
-    }
-  );
+  // Use Prism.js for JSON syntax highlighting
+  if (typeof Prism !== 'undefined' && Prism.languages.json) {
+    return Prism.highlight(jsonStr, Prism.languages.json, 'json');
+  }
+  // Fallback to escaping if Prism is not available
+  return window.OpenAPIPuer.escapeHtml(jsonStr);
 };
 
 window.OpenAPIPuer.showDeleteConfirmDialog = function(paramName, onConfirm) {

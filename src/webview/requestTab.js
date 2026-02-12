@@ -427,25 +427,12 @@
   };
 
   S._highlightJson = function(json) {
-    var escaped = json
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    return escaped.replace(
-      /("(?:\\.|[^"\\])*")\s*(:)|("(?:\\.|[^"\\])*")|((?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))|(\btrue\b|\bfalse\b)|(\bnull\b)|([{}])|([[\]])|(:)|(,)/g,
-      function(match, key, colon, str, num, bool, nil, brace, bracket, colonOnly, comma) {
-        if (key) return '<span class="syntax-key">' + key + '</span>' + '<span class="syntax-colon">:</span>';
-        if (str) return '<span class="syntax-string">' + str + '</span>';
-        if (num) return '<span class="syntax-number">' + num + '</span>';
-        if (bool) return '<span class="syntax-boolean">' + bool + '</span>';
-        if (nil) return '<span class="syntax-null">' + nil + '</span>';
-        if (brace) return '<span class="syntax-brace">' + brace + '</span>';
-        if (bracket) return '<span class="syntax-bracket">' + bracket + '</span>';
-        if (colonOnly) return '<span class="syntax-colon">' + colonOnly + '</span>';
-        if (comma) return '<span class="syntax-comma">' + comma + '</span>';
-        return match;
-      }
-    );
+    // Use Prism.js for JSON syntax highlighting
+    if (typeof Prism !== 'undefined' && Prism.languages.json) {
+      return Prism.highlight(json, Prism.languages.json, 'json');
+    }
+    // Fallback to escaping if Prism is not available
+    return S.escapeHtml(json);
   };
 
   S.updateResponseBody = function() {
@@ -455,7 +442,12 @@
     const responseBody = document.getElementById('response-body').querySelector('code');
 
     let body = S.lastResponse.body;
-    var isJson = S.lastResponse.contentType?.includes('json');
+    var contentType = S.lastResponse.contentType || '';
+    var isJson = contentType.includes('json');
+    var isXml = contentType.includes('xml');
+    var isHtml = contentType.includes('html');
+    var isJavascript = contentType.includes('javascript');
+    var isCss = contentType.includes('css');
 
     if (prettyPrint.checked && isJson) {
       try {
@@ -463,10 +455,42 @@
       } catch {}
     }
 
-    if (isJson) {
-      responseBody.innerHTML = S._highlightJson(body);
+    // Use Prism.js for syntax highlighting based on content type
+    if (typeof Prism !== 'undefined') {
+      var language = null;
+      var grammar = null;
+
+      if (isJson && Prism.languages.json) {
+        language = 'json';
+        grammar = Prism.languages.json;
+      } else if (isXml && Prism.languages.xml) {
+        language = 'xml';
+        grammar = Prism.languages.xml;
+      } else if (isHtml && Prism.languages.html) {
+        language = 'html';
+        grammar = Prism.languages.html;
+      } else if (isJavascript && Prism.languages.javascript) {
+        language = 'javascript';
+        grammar = Prism.languages.javascript;
+      } else if (isCss && Prism.languages.css) {
+        language = 'css';
+        grammar = Prism.languages.css;
+      }
+
+      if (grammar) {
+        responseBody.innerHTML = Prism.highlight(body, grammar, language);
+        responseBody.className = 'language-' + language;
+      } else {
+        responseBody.textContent = body;
+        responseBody.className = '';
+      }
     } else {
-      responseBody.textContent = body;
+      // Fallback when Prism is not available
+      if (isJson) {
+        responseBody.innerHTML = S._highlightJson(body);
+      } else {
+        responseBody.textContent = body;
+      }
     }
 
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));

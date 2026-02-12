@@ -197,7 +197,8 @@ export class ApiPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'src', 'webview'),
           vscode.Uri.joinPath(extensionUri, 'out', 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'resources')
+          vscode.Uri.joinPath(extensionUri, 'resources'),
+          vscode.Uri.joinPath(extensionUri, 'node_modules', 'prismjs')
         ]
       }
     );
@@ -227,7 +228,8 @@ export class ApiPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'src', 'webview'),
           vscode.Uri.joinPath(extensionUri, 'out', 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'resources')
+          vscode.Uri.joinPath(extensionUri, 'resources'),
+          vscode.Uri.joinPath(extensionUri, 'node_modules', 'prismjs')
         ]
       }
     );
@@ -522,6 +524,15 @@ export class ApiPanel {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'styles.css')
     );
+    const prismCssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'themes', 'prism-tomorrow.css')
+    );
+    const prismJsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'prism.js')
+    );
+    const prismJsonUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'components', 'prism-json.min.js')
+    );
     const utilsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'utils.js')
     );
@@ -549,6 +560,7 @@ export class ApiPanel {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <link href="${prismCssUri}" rel="stylesheet">
   <link href="${styleUri}" rel="stylesheet">
   <title>OpenAPI Puer</title>
 </head>
@@ -733,6 +745,8 @@ export class ApiPanel {
     </div>
   </div>
 
+  <script nonce="${nonce}" src="${prismJsUri}"></script>
+  <script nonce="${nonce}" src="${prismJsonUri}"></script>
   <script nonce="${nonce}" src="${utilsUri}"></script>
   <script nonce="${nonce}" src="${detailsTabUri}"></script>
   <script nonce="${nonce}" src="${requestTabUri}"></script>

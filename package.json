@@ -198,7 +198,7 @@
           "when": "view == openapi-puer.apiExplorer && viewItem == file",
           "group": "1_actions@2"
         },
-{
+        {
           "command": "openapi-puer.viewSourceCode",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
           "group": "1_actions@1"
@@ -259,7 +259,8 @@
   "dependencies": {
     "@apidevtools/swagger-parser": "^10.1.1",
     "@vscode/webview-ui-toolkit": "^1.4.0",
-    "axios": "^1.13.5"
+    "axios": "^1.13.5",
+    "prismjs": "^1.30.0"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

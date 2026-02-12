@@ -1184,7 +1184,23 @@ input[type="text"]:focus, textarea:focus {
   background: none;
 }
 
-/* Response body syntax highlighting */
+/* Response body syntax highlighting - Prism.js overrides for VS Code theme */
+#response-body code[class*="language-"],
+#response-body pre[class*="language-"] {
+  background: transparent;
+  text-shadow: none;
+}
+
+/* Prism token overrides for VS Code dark theme */
+#response-body .token.property { color: #9cdcfe; }
+#response-body .token.string { color: #ce9178; }
+#response-body .token.number { color: #b5cea8; }
+#response-body .token.boolean { color: #569cd6; }
+#response-body .token.null { color: #569cd6; }
+#response-body .token.punctuation { color: var(--vscode-foreground); }
+#response-body .token.operator { color: var(--vscode-foreground); }
+
+/* Legacy syntax classes for backward compatibility */
 #response-body .syntax-key { color: #9cdcfe; }
 #response-body .syntax-string { color: #ce9178; }
 #response-body .syntax-number { color: #b5cea8; }
@@ -1228,9 +1244,91 @@ input[type="text"]:focus, textarea:focus {
   background-color: var(--vscode-editor-background);
   padding: 12px;
   border-radius: 4px;
-  overflow: auto;
   white-space: pre;
   line-height: 1.5;
+}
+
+/* Response section styles */
+#responses-content .response-item {
+  margin-bottom: 16px;
+}
+
+#responses-content .response-item h5 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#responses-content .response-item p {
+  margin: 4px 0 8px 0;
+  font-size: 12px;
+}
+
+#responses-content .schema-viewer {
+  max-height: 300px;
+  overflow-x: auto;
+  overflow-y: scroll;
+  border: 1px solid var(--vscode-panel-border);
+  display: block;
+}
+
+/* Custom scrollbar styling for schema viewer */
+#responses-content .schema-viewer::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#responses-content .schema-viewer::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 4px;
+}
+
+#responses-content .schema-viewer::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+  border-radius: 4px;
+}
+
+#responses-content .schema-viewer::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Prism.js overrides for schema viewer */
+.schema-viewer code[class*="language-"],
+.schema-viewer pre[class*="language-"] {
+  background: transparent;
+  text-shadow: none;
+  margin: 0;
+  padding: 0;
+}
+
+.schema-viewer .token.property { color: #9cdcfe; }
+.schema-viewer .token.string { color: #ce9178; }
+.schema-viewer .token.number { color: #b5cea8; }
+.schema-viewer .token.boolean { color: #569cd6; }
+.schema-viewer .token.null { color: #569cd6; }
+.schema-viewer .token.punctuation { color: var(--vscode-foreground); }
+.schema-viewer .token.operator { color: var(--vscode-foreground); }
+
+/* Prism.js overrides for source code blocks */
+.schema-source-code code[class*="language-"],
+.schema-source-code pre[class*="language-"] {
+  background: transparent;
+  text-shadow: none;
+}
+
+.schema-source-code .token.property { color: #9cdcfe; }
+.schema-source-code .token.string { color: #ce9178; }
+.schema-source-code .token.number { color: #b5cea8; }
+.schema-source-code .token.boolean { color: #569cd6; }
+.schema-source-code .token.null { color: #569cd6; }
+.schema-source-code .token.punctuation { color: var(--vscode-foreground); }
+.schema-source-code .token.operator { color: var(--vscode-foreground); }
+
+/* General Prism.js theme overrides for VS Code integration */
+code[class*="language-"],
+pre[class*="language-"] {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
 }
 
 /* JSON Syntax Highlighting */
