@@ -664,10 +664,6 @@
       container.appendChild(spacer);
     }
 
-    var editorLabel = document.createElement('div');
-    editorLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
-    editorLabel.textContent = 'Request Body (JSON)';
-    container.appendChild(editorLabel);
 
     // JSON editor with Prism.js highlighting
     var editorWrapper = document.createElement('div');
@@ -730,10 +726,6 @@
 
   // Raw text body editor for request tab
   S._renderRequestRawBodyEditor = function(container, existingMedia, endpoint) {
-    var editorLabel = document.createElement('div');
-    editorLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
-    editorLabel.textContent = 'Request Body (Raw)';
-    container.appendChild(editorLabel);
 
     var textarea = document.createElement('textarea');
     textarea.className = 'body-editor-area';

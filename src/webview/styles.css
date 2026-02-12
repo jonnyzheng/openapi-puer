@@ -136,6 +136,10 @@ body {
   overflow: hidden;
 }
 
+#details-tab {
+  overflow: auto;
+}
+
 #request-tab {
   gap: 16px;
 }
@@ -323,7 +327,7 @@ body {
 
 .body-editor-area {
   width: 100%;
-  min-height: 200px;
+  min-height: 300px;
   padding: 8px;
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: var(--vscode-editor-font-size, 13px);
@@ -873,8 +877,8 @@ th {
   background-color: var(--vscode-sideBar-background);
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
-  padding: 12px;
-  height: 280px;
+  padding: 12px 12px 5px 12px;
+  height: 300px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -897,7 +901,7 @@ th {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 12px;
+  margin-bottom: 12px 12px 5px 12px;
   flex-shrink: 0;
 }
 
@@ -1328,7 +1332,7 @@ input[type="text"]:focus, textarea:focus {
 /* JSON editor highlighting styles */
 .json-editor-wrapper {
   position: relative;
-  min-height: 200px;
+  min-height: 300px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1336,7 +1340,7 @@ input[type="text"]:focus, textarea:focus {
 
 .json-editor-wrapper .body-editor-area {
   width: 100%;
-  min-height: 200px;
+  min-height: 300px;
   flex: 1;
   padding: 8px;
   margin: 0;
