@@ -248,9 +248,12 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile",
+    "vscode:prepublish": "pnpm run build",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "build:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --minify",
+    "watch:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --watch",
+    "build": "pnpm run build:css && pnpm run compile",
+    "watch": "pnpm run watch:css & tsc -watch -p ./",
     "pretest": "pnpm run compile && pnpm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"
@@ -263,6 +266,7 @@
     "prismjs": "^1.30.0"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.1.18",
     "@types/mocha": "^10.0.10",
     "@types/node": "~20.19.31",
     "@types/vscode": "^1.108.1",
@@ -270,7 +274,10 @@
     "@typescript-eslint/parser": "^6.21.0",
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.5.2",
+    "autoprefixer": "^10.4.24",
     "eslint": "^8.57.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3"
   }
 }
