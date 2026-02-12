@@ -669,6 +669,10 @@
     editorLabel.textContent = 'Request Body (JSON)';
     container.appendChild(editorLabel);
 
+    // JSON editor with Prism.js highlighting
+    var editorWrapper = document.createElement('div');
+    editorWrapper.className = 'json-editor-wrapper';
+
     var textarea = document.createElement('textarea');
     textarea.className = 'body-editor-area';
     textarea.id = 'request-body-json-editor';
@@ -680,7 +684,48 @@
       textarea.value = '';
     }
     textarea.placeholder = '{\n  "key": "value"\n}';
-    container.appendChild(textarea);
+
+    // Highlight on initial render and on input
+    function updateHighlight() {
+      if (typeof Prism !== 'undefined' && Prism.languages.json) {
+        try {
+          var json = textarea.value;
+          // Create a highlighted version
+          var highlighted = Prism.highlight(json, Prism.languages.json, 'json');
+          var codeElement = document.getElementById('request-body-json-highlight');
+          if (codeElement) {
+            codeElement.innerHTML = highlighted;
+            codeElement.className = 'language-json';
+          }
+        } catch (e) {
+          // Ignore invalid JSON for highlighting
+        }
+      }
+    }
+
+    textarea.addEventListener('input', updateHighlight);
+
+    // Create highlighted code display
+    var highlightPre = document.createElement('pre');
+    highlightPre.className = 'json-highlight-pre';
+    var highlightCode = document.createElement('code');
+    highlightCode.id = 'request-body-json-highlight';
+    highlightCode.className = 'language-json';
+    highlightPre.appendChild(highlightCode);
+
+    editorWrapper.appendChild(highlightPre);
+    editorWrapper.appendChild(textarea);
+
+    // Sync scroll positions
+    textarea.addEventListener('scroll', function() {
+      highlightPre.scrollTop = textarea.scrollTop;
+      highlightPre.scrollLeft = textarea.scrollLeft;
+    });
+
+    container.appendChild(editorWrapper);
+
+    // Initial highlight
+    updateHighlight();
   };
 
   // Raw text body editor for request tab

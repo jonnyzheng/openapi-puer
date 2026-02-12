@@ -254,8 +254,9 @@ body {
 
 #def-body-tab .body-editor-content .body-editor-area {
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
   resize: none;
+  overflow: auto;
 }
 
 #def-body-tab .body-editor-content .schema-viewer {
@@ -1323,6 +1324,76 @@ input[type="text"]:focus, textarea:focus {
 .schema-source-code .token.null { color: #569cd6; }
 .schema-source-code .token.punctuation { color: var(--vscode-foreground); }
 .schema-source-code .token.operator { color: var(--vscode-foreground); }
+
+/* JSON editor highlighting styles */
+.json-editor-wrapper {
+  position: relative;
+  min-height: 200px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.json-editor-wrapper .body-editor-area {
+  width: 100%;
+  min-height: 200px;
+  flex: 1;
+  padding: 8px;
+  margin: 0;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  line-height: 1.5;
+  resize: none;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  overflow: auto;
+}
+
+.json-editor-wrapper .body-editor-area:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* Hide the highlight pre - just use plain textarea for now */
+.json-editor-wrapper .json-highlight-pre {
+  display: none;
+}
+
+.json-editor-wrapper .json-highlight-pre code[class*="language-"] {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+
+/* Override tab-specific body editor styles for JSON editor */
+#def-body-tab .body-editor-content .json-editor-wrapper,
+#req-body-tab .body-editor-content .json-editor-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#def-body-tab .body-editor-content .json-editor-wrapper .body-editor-area,
+#req-body-tab .body-editor-content .json-editor-wrapper .body-editor-area {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  overflow: auto;
+}
+
+/* Prism token overrides for JSON editor - VS Code dark theme */
+.json-editor-wrapper .token.property { color: #9cdcfe; }
+.json-editor-wrapper .token.string { color: #ce9178; }
+.json-editor-wrapper .token.number { color: #b5cea8; }
+.json-editor-wrapper .token.boolean { color: #569cd6; }
+.json-editor-wrapper .token.null { color: #569cd6; }
+.json-editor-wrapper .token.punctuation { color: var(--vscode-foreground); }
+.json-editor-wrapper .token.operator { color: var(--vscode-foreground); }
 
 /* General Prism.js theme overrides for VS Code integration */
 code[class*="language-"],
@@ -2516,8 +2587,9 @@ tr:hover .detail-field-delete-btn {
 
 #req-body-tab .body-editor-content .body-editor-area {
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
   resize: none;
+  overflow: auto;
 }
 
 #req-body-tab .body-editor-content .schema-viewer {
