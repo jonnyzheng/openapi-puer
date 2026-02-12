@@ -84,6 +84,14 @@ export class ApiPanel {
   }>();
   readonly onUpdatePath = this.onUpdatePathEmitter.event;
 
+  private onUpdateMethodEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    oldMethod: string;
+    newMethod: string;
+  }>();
+  readonly onUpdateMethod = this.onUpdateMethodEmitter.event;
+
   private onAddServerEmitter = new vscode.EventEmitter<{
     filePath: string;
     server: { url: string; description?: string };
@@ -385,6 +393,14 @@ export class ApiPanel {
           method: string;
         });
         break;
+      case 'updateMethod':
+        this.onUpdateMethodEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          oldMethod: string;
+          newMethod: string;
+        });
+        break;
       case 'updateRequestBody':
         this.onUpdateRequestBodyEmitter.fire(message.payload as {
           filePath: string;
@@ -569,7 +585,7 @@ export class ApiPanel {
     <div id="header">
       <div id="endpoint-info">
         <span id="method-badge" class="method-badge"></span>
-        <span id="endpoint-path"></span>
+        <span id="endpoint-path"></span><span id="query-params-preview"></span>
       </div>
       <div id="environment-selector">
         <select id="environment-select">

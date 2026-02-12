@@ -1021,6 +1021,62 @@ export class OpenApiService {
     }
   }
 
+  async updateMethod(
+    filePath: string,
+    path: string,
+    oldMethod: string,
+    newMethod: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      // Read the raw file content
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      // Check if path exists
+      if (!spec.paths?.[path]) {
+        return { success: false, message: `Path ${path} not found in spec` };
+      }
+
+      const pathObj = spec.paths[path];
+      const oldMethodLower = oldMethod.toLowerCase();
+      const newMethodLower = newMethod.toLowerCase();
+
+      // Check if old method exists on this path
+      if (!pathObj[oldMethodLower]) {
+        return { success: false, message: `Method ${oldMethod} not found for path ${path}` };
+      }
+
+      // If method is not changing, nothing to do
+      if (oldMethodLower === newMethodLower) {
+        return { success: true };
+      }
+
+      // Check if new method already exists on this path
+      if (pathObj[newMethodLower]) {
+        return { success: false, message: `${newMethod.toUpperCase()} ${path} already exists in spec` };
+      }
+
+      // Move the operation to the new method
+      pathObj[newMethodLower] = pathObj[oldMethodLower];
+
+      // Remove the old method
+      delete pathObj[oldMethodLower];
+
+      // Write the updated spec back to file
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+      // Clear cache for this file so it gets re-parsed
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating method: ${message}`);
+      return { success: false, message };
+    }
+  }
+
   async addServer(
     filePath: string,
     server: { url: string; description?: string }

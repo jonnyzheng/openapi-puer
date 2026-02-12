@@ -708,6 +708,22 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  // Handle update method
+  panel.onUpdateMethod(async (data) => {
+    const result = await openApiService.updateMethod(
+      data.filePath,
+      data.path,
+      data.oldMethod,
+      data.newMethod
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
   // Handle add server
   panel.onAddServer(async (data) => {
     const result = await openApiService.addServer(
@@ -946,6 +962,12 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onUpdatePath(async (data) => {
     const result = await openApiService.updatePath(data.filePath, data.oldPath, data.newPath, data.method);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdateMethod(async (data) => {
+    const result = await openApiService.updateMethod(data.filePath, data.path, data.oldMethod, data.newMethod);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) { await refreshApiFiles(); }
   });

@@ -63,6 +63,54 @@
     S.currentEndpoint.path = newPath;
   };
 
+  S.saveMethod = function(oldMethod, newMethod) {
+    if (!S.currentEndpoint) return;
+
+    S.vscode.postMessage({
+      type: 'updateMethod',
+      payload: {
+        filePath: S.currentEndpoint.filePath,
+        path: S.currentEndpoint.path,
+        oldMethod: oldMethod,
+        newMethod: newMethod
+      }
+    });
+
+    S.currentEndpoint.method = newMethod;
+  };
+
+  // Update query params preview for all HTTP methods
+  S.updateQueryParamsPreview = function(endpoint) {
+    const previewContainer = document.getElementById('query-params-preview');
+    if (!previewContainer) return;
+
+    // Clear previous content
+    previewContainer.innerHTML = '';
+    previewContainer.classList.remove('visible');
+
+    if (!endpoint) {
+      return;
+    }
+
+    // Get query parameters
+    const queryParams = (endpoint.parameters || []).filter(p => p.in === 'query');
+    if (queryParams.length === 0) {
+      return;
+    }
+
+    const escapeHtml = S.escapeHtml;
+
+    // Build the query string preview (displayed inline after path)
+    const queryString = queryParams.map(p => {
+      const name = escapeHtml(p.name);
+      const placeholder = p.schema?.type || 'value';
+      return `<span class="query-param-name">${name}</span>=<span class="query-param-value">{${escapeHtml(placeholder)}}</span>`;
+    }).join('<span class="query-param-separator">&amp;</span>');
+
+    previewContainer.innerHTML = `?${queryString}`;
+    previewContainer.classList.add('visible');
+  };
+
   S.createEditableField = function(label, field, value, isTextarea) {
     if (isTextarea === undefined) isTextarea = false;
     const row = document.createElement('div');
@@ -665,10 +713,6 @@
 
     // Schema viewer (read-only)
     if (schema && Object.keys(schema).length > 0 && !schema.$ref) {
-      var viewerLabel = document.createElement('div');
-      viewerLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
-      viewerLabel.textContent = 'Schema Preview';
-      container.appendChild(viewerLabel);
 
       var viewer = document.createElement('div');
       viewer.className = 'schema-viewer';
@@ -680,10 +724,6 @@
       container.appendChild(spacer);
     }
 
-    var editorLabel = document.createElement('div');
-    editorLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
-    editorLabel.textContent = 'Schema JSON';
-    container.appendChild(editorLabel);
 
     // JSON editor with Prism.js highlighting
     var editorWrapper = document.createElement('div');
@@ -937,6 +977,11 @@
     } else if (field === 'in') {
       param.in = value;
     }
+
+    // Update query params preview if relevant field changed
+    if (field === 'name' || field === 'in' || field === 'type') {
+      S.updateQueryParamsPreview(S.currentEndpoint);
+    }
   };
 
   S.deleteParameter = function(paramIndex, paramName, paramIn) {
@@ -961,6 +1006,9 @@
     S.currentEndpoint.parameters.splice(paramIndex, 1);
 
     S.renderDefinitionTabs(true);
+
+    // Update query params preview after deletion
+    S.updateQueryParamsPreview(S.currentEndpoint);
   };
 
   S.showAddParameterDialog = function(defaultLocation, showLocation) {
@@ -1085,6 +1133,9 @@
     });
 
     S.renderDefinitionTabs(true);
+
+    // Update query params preview after adding parameter
+    S.updateQueryParamsPreview(S.currentEndpoint);
   };
 
   S.showEndpoint = function(endpoint, servers, components) {
@@ -1128,9 +1179,60 @@
 
     S.switchMainTab('details');
 
+    // Setup editable method badge
     const methodBadge = document.getElementById('method-badge');
-    methodBadge.textContent = endpoint.method.toUpperCase();
-    methodBadge.className = 'method-badge ' + endpoint.method;
+    const newMethodBadge = methodBadge.cloneNode(false);
+    newMethodBadge.textContent = endpoint.method.toUpperCase();
+    newMethodBadge.className = 'method-badge ' + endpoint.method + ' editable';
+    newMethodBadge.title = 'Click to change HTTP method';
+    methodBadge.parentNode.replaceChild(newMethodBadge, methodBadge);
+
+    newMethodBadge.addEventListener('click', () => {
+      if (newMethodBadge.classList.contains('editing')) return;
+
+      newMethodBadge.classList.add('editing');
+      const currentMethod = S.currentEndpoint.method;
+
+      const select = document.createElement('select');
+      select.className = 'method-edit-select';
+      const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
+      methods.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m;
+        option.textContent = m.toUpperCase();
+        if (m === currentMethod.toLowerCase()) option.selected = true;
+        select.appendChild(option);
+      });
+
+      newMethodBadge.textContent = '';
+      newMethodBadge.appendChild(select);
+      select.focus();
+
+      const finishEdit = () => {
+        const newMethod = select.value;
+        newMethodBadge.classList.remove('editing');
+        newMethodBadge.textContent = newMethod.toUpperCase();
+        newMethodBadge.className = 'method-badge ' + newMethod + ' editable';
+
+        if (newMethod !== currentMethod.toLowerCase()) {
+          S.saveMethod(currentMethod, newMethod);
+        }
+      };
+
+      select.addEventListener('blur', finishEdit);
+      select.addEventListener('change', () => {
+        select.blur();
+      });
+      select.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          select.value = currentMethod.toLowerCase();
+          select.blur();
+        }
+      });
+    });
+
+    // Show query params preview
+    S.updateQueryParamsPreview(endpoint);
 
     const pathElement = document.getElementById('endpoint-path');
     const newPathElement = pathElement.cloneNode(false);

@@ -37,9 +37,68 @@ body {
   gap: 8px;
 }
 
+/* Query params preview for GET requests - displays inline after path */
+#query-params-preview {
+  display: none;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+  pointer-events: none;
+}
+
+#query-params-preview.visible {
+  display: inline;
+}
+
+.query-param-name {
+  color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe);
+}
+
+.query-param-value {
+  color: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0);
+  font-style: italic;
+}
+
+.query-param-separator {
+  color: var(--vscode-descriptionForeground);
+}
+
 .method-badge {
   padding: 2px 8px;
   border-radius: 4px;
+  cursor: default;
+}
+
+.method-badge.editable {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.method-badge.editable:hover {
+  opacity: 0.85;
+}
+
+.method-badge.editing {
+  padding: 0;
+  background: none;
+}
+
+.method-edit-select {
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  text-transform: uppercase;
+  border: 1px solid var(--vscode-focusBorder);
+  background-color: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  cursor: pointer;
+  outline: none;
+}
+
+.method-edit-select option {
+  font-weight: bold;
   font-weight: bold;
   font-size: 12px;
   text-transform: uppercase;
@@ -226,6 +285,7 @@ body {
 }
 
 .definition-tab-content {
+  min-height: 200px;
   display: none;
   padding: 12px;
 }
@@ -240,7 +300,7 @@ body {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  min-height: 200px;
   overflow: hidden;
 }
 
