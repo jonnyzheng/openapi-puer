@@ -2863,3 +2863,150 @@ td.no-params-message {
 .body-header-save-btn:hover {
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
+
+/* ============================================
+   TREE VIEW STYLES FOR NESTED SCHEMA
+   ============================================ */
+
+.tree-row {
+  transition: background-color 0.15s ease;
+}
+
+.tree-row:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.tree-row.tree-hidden {
+  display: none;
+}
+
+.tree-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-indent {
+  display: inline-block;
+  flex-shrink: 0;
+  height: 1px;
+}
+
+/* Depth-based indentation */
+.tree-row[data-depth="1"] .tree-indent { width: 20px; }
+.tree-row[data-depth="2"] .tree-indent { width: 40px; }
+.tree-row[data-depth="3"] .tree-indent { width: 60px; }
+.tree-row[data-depth="4"] .tree-indent { width: 80px; }
+.tree-row[data-depth="5"] .tree-indent { width: 100px; }
+.tree-row[data-depth="6"] .tree-indent { width: 120px; }
+
+.tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  font-size: 10px;
+  user-select: none;
+}
+
+.tree-chevron:hover {
+  color: var(--vscode-foreground);
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.tree-chevron.placeholder {
+  visibility: hidden;
+}
+
+/* Add child button for object/array types */
+.tree-add-child-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: 4px;
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.tree-row:hover .tree-add-child-btn,
+.tree-add-child-btn:focus {
+  opacity: 1;
+}
+
+.tree-add-child-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+  color: var(--vscode-foreground);
+}
+
+/* Tree connector lines for nested items */
+.tree-row[data-depth]:not([data-depth="0"]) td:first-child {
+  position: relative;
+}
+
+.tree-row[data-depth]:not([data-depth="0"]) td:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--vscode-panel-border);
+  opacity: 0.5;
+}
+
+/* Position connector lines based on depth */
+.tree-row[data-depth="1"] td:first-child::before { left: 8px; }
+.tree-row[data-depth="2"] td:first-child::before { left: 28px; }
+.tree-row[data-depth="3"] td:first-child::before { left: 48px; }
+.tree-row[data-depth="4"] td:first-child::before { left: 68px; }
+.tree-row[data-depth="5"] td:first-child::before { left: 88px; }
+.tree-row[data-depth="6"] td:first-child::before { left: 108px; }
+
+/* Horizontal connector line */
+.tree-row[data-depth]:not([data-depth="0"]) td:first-child::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  width: 8px;
+  background-color: var(--vscode-panel-border);
+  opacity: 0.5;
+}
+
+.tree-row[data-depth="1"] td:first-child::after { left: 8px; }
+.tree-row[data-depth="2"] td:first-child::after { left: 28px; }
+.tree-row[data-depth="3"] td:first-child::after { left: 48px; }
+.tree-row[data-depth="4"] td:first-child::after { left: 68px; }
+.tree-row[data-depth="5"] td:first-child::after { left: 88px; }
+.tree-row[data-depth="6"] td:first-child::after { left: 108px; }
+
+/* Nested property name input styling */
+.tree-name-input {
+  min-width: 40px;
+}
+
+/* Set name input width based on depth - shorter for nested rows */
+.tree-row[data-depth="0"] .tree-name-input { width: 120px; }
+.tree-row[data-depth="1"] .tree-name-input { width: 100px; }
+.tree-row[data-depth="2"] .tree-name-input { width: 80px; }
+.tree-row[data-depth="3"] .tree-name-input { width: 60px; }
+.tree-row[data-depth="4"] .tree-name-input { width: 50px; }
+.tree-row[data-depth="5"] .tree-name-input { width: 40px; }
+.tree-row[data-depth="6"] .tree-name-input { width: 40px; }

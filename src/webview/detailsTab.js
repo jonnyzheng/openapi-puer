@@ -769,27 +769,10 @@
     return { content: content };
   };
 
-  // JSON body editor - GUI table for schema properties
+  // JSON body editor - GUI table for schema properties with tree view support
   S._renderJsonBodyEditor = function(container, existingMedia) {
     var schema = existingMedia && existingMedia.schema ? existingMedia.schema : {};
     var contentType = 'application/json';
-
-    // Extract existing fields from schema properties
-    var rows = [];
-    if (schema && schema.properties) {
-      var props = schema.properties;
-      var requiredList = schema.required || [];
-      Object.keys(props).forEach(function(name) {
-        var p = props[name];
-        rows.push({
-          name: name,
-          type: p.type || 'string',
-          description: p.description || '',
-          required: requiredList.indexOf(name) !== -1,
-          others: p // Keep full property definition for Others column
-        });
-      });
-    }
 
     var table = document.createElement('table');
     table.className = 'body-kv-table';
@@ -801,77 +784,267 @@
     var tbody = document.createElement('tbody');
     table.appendChild(tbody);
 
-    // Store property definitions for Others editing
+    // Store property definitions for Others editing (keyed by path)
     var propertyDefs = {};
 
-    function addJsonRow(data) {
-      var tr = document.createElement('tr');
-      var propName = data.name || '';
+    // Helper: Check if type can have children
+    function canHaveChildren(type) {
+      return type === 'object' || type === 'array';
+    }
 
-      // Store property definition
-      if (propName) {
-        propertyDefs[propName] = data.others || { type: data.type || 'string' };
+    // Helper: Check if a property definition has nested properties
+    function hasNestedProperties(propDef) {
+      if (!propDef) return false;
+      if (propDef.type === 'object' && propDef.properties && Object.keys(propDef.properties).length > 0) {
+        return true;
+      }
+      if (propDef.type === 'array' && propDef.items && propDef.items.type === 'object' && propDef.items.properties) {
+        return Object.keys(propDef.items.properties).length > 0;
+      }
+      return false;
+    }
+
+    // Helper: Get nested properties from a property definition
+    function getNestedProperties(propDef) {
+      if (!propDef) return null;
+      if (propDef.type === 'object' && propDef.properties) {
+        return { properties: propDef.properties, required: propDef.required || [] };
+      }
+      if (propDef.type === 'array' && propDef.items && propDef.items.properties) {
+        return { properties: propDef.items.properties, required: propDef.items.required || [] };
+      }
+      return null;
+    }
+
+    // Toggle children visibility
+    function toggleChildren(row) {
+      var path = row.getAttribute('data-path');
+      var isExpanded = row.getAttribute('data-expanded') === 'true';
+      var chevron = row.querySelector('.tree-chevron');
+
+      if (isExpanded) {
+        // Collapse: hide all descendants
+        row.setAttribute('data-expanded', 'false');
+        if (chevron) chevron.classList.remove('expanded');
+        var children = tbody.querySelectorAll('tr[data-parent^="' + path + '"]');
+        children.forEach(function(child) {
+          child.classList.add('tree-hidden');
+        });
+      } else {
+        // Expand: show direct children only
+        row.setAttribute('data-expanded', 'true');
+        if (chevron) chevron.classList.add('expanded');
+        var directChildren = tbody.querySelectorAll('tr[data-parent="' + path + '"]');
+        directChildren.forEach(function(child) {
+          child.classList.remove('tree-hidden');
+        });
+      }
+    }
+
+    // Remove all children of a row
+    function removeChildren(path) {
+      var children = tbody.querySelectorAll('tr[data-parent^="' + path + '"]');
+      children.forEach(function(child) {
+        var childPath = child.getAttribute('data-path');
+        delete propertyDefs[childPath];
+        child.remove();
+      });
+    }
+
+    // Find insertion point for a new row (after parent and its existing children)
+    function findInsertionPoint(parentPath) {
+      var rows = tbody.querySelectorAll('tr');
+      var lastMatchingRow = null;
+      for (var i = 0; i < rows.length; i++) {
+        var rowPath = rows[i].getAttribute('data-path');
+        var rowParent = rows[i].getAttribute('data-parent');
+        if (rowPath === parentPath || (rowParent && rowParent.indexOf(parentPath) === 0)) {
+          lastMatchingRow = rows[i];
+        }
+      }
+      return lastMatchingRow ? lastMatchingRow.nextElementSibling : null;
+    }
+
+    // Add a tree row
+    function addTreeRow(data, path, depth, parentPath, isHidden) {
+      var tr = document.createElement('tr');
+      tr.className = 'tree-row';
+      tr.setAttribute('data-path', path);
+      tr.setAttribute('data-depth', depth);
+      tr.setAttribute('data-parent', parentPath);
+      tr.setAttribute('data-expanded', 'false');
+      if (isHidden) tr.classList.add('tree-hidden');
+
+      var propDef = data.others || { type: data.type || 'string' };
+      propertyDefs[path] = propDef;
+
+      var hasChildren = hasNestedProperties(propDef);
+      var type = data.type || 'string';
+
+      // Name cell with indentation and chevron
+      var tdName = document.createElement('td');
+      var nameCell = document.createElement('div');
+      nameCell.className = 'tree-name-cell';
+
+      // Indentation spacer
+      if (depth > 0) {
+        var indent = document.createElement('span');
+        indent.className = 'tree-indent';
+        nameCell.appendChild(indent);
       }
 
-      // Name
-      var tdName = document.createElement('td');
+      // Chevron for expandable items
+      var chevron = document.createElement('span');
+      chevron.className = 'tree-chevron' + (hasChildren ? '' : ' placeholder');
+      chevron.textContent = '▶';
+      if (hasChildren) {
+        chevron.addEventListener('click', function(e) {
+          e.stopPropagation();
+          toggleChildren(tr);
+        });
+      }
+      nameCell.appendChild(chevron);
+
+      // Name input
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
-      nameInput.value = propName;
+      nameInput.className = 'tree-name-input';
+      nameInput.value = data.name || '';
       nameInput.placeholder = 'field name';
       nameInput.addEventListener('change', function() {
-        // Update propertyDefs when name changes
-        var oldName = propName;
+        // Update path when name changes
+        var oldPath = tr.getAttribute('data-path');
         var newName = nameInput.value.trim();
-        if (oldName && propertyDefs[oldName]) {
-          propertyDefs[newName] = propertyDefs[oldName];
-          delete propertyDefs[oldName];
-        }
-        propName = newName;
+        var newPath = parentPath ? parentPath + '.' + newName : newName;
+
+        // Update this row's path
+        tr.setAttribute('data-path', newPath);
+
+        // Update propertyDefs
+        propertyDefs[newPath] = propertyDefs[oldPath];
+        delete propertyDefs[oldPath];
+
+        // Update children paths
+        var children = tbody.querySelectorAll('tr[data-parent^="' + oldPath + '"]');
+        children.forEach(function(child) {
+          var childPath = child.getAttribute('data-path');
+          var childParent = child.getAttribute('data-parent');
+          var newChildPath = childPath.replace(oldPath, newPath);
+          var newChildParent = childParent.replace(oldPath, newPath);
+          child.setAttribute('data-path', newChildPath);
+          child.setAttribute('data-parent', newChildParent);
+          propertyDefs[newChildPath] = propertyDefs[childPath];
+          delete propertyDefs[childPath];
+        });
       });
-      tdName.appendChild(nameInput);
+      nameCell.appendChild(nameInput);
+
+      // Add child button for object/array types
+      var addChildBtn = document.createElement('button');
+      addChildBtn.className = 'tree-add-child-btn';
+      addChildBtn.textContent = '+';
+      addChildBtn.title = 'Add nested property';
+      addChildBtn.style.display = canHaveChildren(type) ? '' : 'none';
+      addChildBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var currentPath = tr.getAttribute('data-path');
+        var childPath = currentPath + '.newField';
+        var childDepth = parseInt(tr.getAttribute('data-depth')) + 1;
+
+        // Ensure parent is expanded
+        tr.setAttribute('data-expanded', 'true');
+        chevron.classList.add('expanded');
+        chevron.classList.remove('placeholder');
+
+        // Add new child row
+        var insertPoint = findInsertionPoint(currentPath);
+        var newRow = addTreeRow(
+          { name: '', type: 'string', description: '', required: false, others: { type: 'string' } },
+          childPath,
+          childDepth,
+          currentPath,
+          false
+        );
+        if (insertPoint) {
+          tbody.insertBefore(newRow, insertPoint);
+        } else {
+          tbody.appendChild(newRow);
+        }
+
+        // Focus the new row's name input
+        var newNameInput = newRow.querySelector('.tree-name-input');
+        if (newNameInput) newNameInput.focus();
+      });
+      nameCell.appendChild(addChildBtn);
+
+      tdName.appendChild(nameCell);
       tr.appendChild(tdName);
 
-      // Type
+      // Type cell
       var tdType = document.createElement('td');
       var typeSelect = document.createElement('select');
       ['string', 'integer', 'number', 'boolean', 'array', 'object'].forEach(function(t) {
         var opt = document.createElement('option');
         opt.value = t;
         opt.textContent = t;
-        if (t === (data.type || 'string')) opt.selected = true;
+        if (t === type) opt.selected = true;
         typeSelect.appendChild(opt);
       });
       typeSelect.addEventListener('change', function() {
-        if (propName && propertyDefs[propName]) {
-          propertyDefs[propName].type = typeSelect.value;
+        var newType = typeSelect.value;
+        var currentPath = tr.getAttribute('data-path');
+
+        // Update propertyDefs
+        if (propertyDefs[currentPath]) {
+          propertyDefs[currentPath].type = newType;
+        }
+
+        // Show/hide add child button
+        addChildBtn.style.display = canHaveChildren(newType) ? '' : 'none';
+
+        // If changing away from object/array, remove children
+        if (!canHaveChildren(newType)) {
+          removeChildren(currentPath);
+          chevron.classList.add('placeholder');
+          chevron.classList.remove('expanded');
+          tr.setAttribute('data-expanded', 'false');
+        }
+
+        // If changing to object/array, update chevron
+        if (canHaveChildren(newType)) {
+          var hasKids = tbody.querySelectorAll('tr[data-parent="' + currentPath + '"]').length > 0;
+          if (hasKids) {
+            chevron.classList.remove('placeholder');
+          }
         }
       });
       tdType.appendChild(typeSelect);
       tr.appendChild(tdType);
 
-      // Description
+      // Description cell
       var tdDesc = document.createElement('td');
       var descInput = document.createElement('input');
       descInput.type = 'text';
       descInput.value = data.description || '';
       descInput.placeholder = 'description';
       descInput.addEventListener('change', function() {
-        if (propName && propertyDefs[propName]) {
-          propertyDefs[propName].description = descInput.value;
+        var currentPath = tr.getAttribute('data-path');
+        if (propertyDefs[currentPath]) {
+          propertyDefs[currentPath].description = descInput.value;
         }
       });
       tdDesc.appendChild(descInput);
       tr.appendChild(tdDesc);
 
-      // Others cell - clickable summary with tooltip
+      // Others cell
       var tdOthers = document.createElement('td');
       tdOthers.className = 'others-cell';
       var othersSpan = document.createElement('span');
 
       function updateOthersSummary() {
-        var propDef = propertyDefs[propName] || {};
-        var summary = S.getOthersSummary ? S.getOthersSummary(propDef) : '—';
+        var currentPath = tr.getAttribute('data-path');
+        var currentPropDef = propertyDefs[currentPath] || {};
+        var summary = S.getOthersSummary ? S.getOthersSummary(currentPropDef) : '—';
         if (summary === '—') {
           othersSpan.className = 'others-placeholder';
           othersSpan.textContent = '—';
@@ -884,11 +1057,11 @@
       tdOthers.appendChild(othersSpan);
 
       // Tooltip on hover
-      (function(cell, getPropDef) {
+      (function(cell, getPath) {
         var tooltip = null;
         cell.addEventListener('mouseenter', function() {
-          var propDef = getPropDef();
-          var details = S.getOthersDetails ? S.getOthersDetails(propDef) : [];
+          var currentPropDef = propertyDefs[getPath()] || {};
+          var details = S.getOthersDetails ? S.getOthersDetails(currentPropDef) : [];
           if (details.length === 0) return;
 
           tooltip = document.createElement('div');
@@ -910,19 +1083,6 @@
           }
           tooltip.appendChild(tooltipTable);
           cell.appendChild(tooltip);
-
-          // Position: ensure tooltip stays within viewport
-          var tipRect = tooltip.getBoundingClientRect();
-          if (tipRect.right > window.innerWidth) {
-            tooltip.style.left = 'auto';
-            tooltip.style.right = '0';
-          }
-          if (tipRect.bottom > window.innerHeight) {
-            tooltip.style.top = 'auto';
-            tooltip.style.bottom = '100%';
-            tooltip.style.marginBottom = '4px';
-            tooltip.style.marginTop = '0';
-          }
         });
         cell.addEventListener('mouseleave', function() {
           if (tooltip && tooltip.parentNode) {
@@ -930,17 +1090,18 @@
             tooltip = null;
           }
         });
-      })(tdOthers, function() { return propertyDefs[propName] || {}; });
+      })(tdOthers, function() { return tr.getAttribute('data-path'); });
 
       // Click to edit Others
       tdOthers.addEventListener('click', function() {
+        var currentPath = tr.getAttribute('data-path');
         var currentName = nameInput.value.trim();
         if (!currentName) {
           alert('Please enter a field name first');
           return;
         }
-        S._showBodyPropertyDetailDialog(currentName, propertyDefs[currentName] || { type: typeSelect.value }, function(updatedDef) {
-          propertyDefs[currentName] = updatedDef;
+        S._showBodyPropertyDetailDialog(currentName, propertyDefs[currentPath] || { type: typeSelect.value }, function(updatedDef) {
+          propertyDefs[currentPath] = updatedDef;
           typeSelect.value = updatedDef.type || 'string';
           descInput.value = updatedDef.description || '';
           updateOthersSummary();
@@ -948,7 +1109,7 @@
       });
       tr.appendChild(tdOthers);
 
-      // Required
+      // Required cell
       var tdReq = document.createElement('td');
       var reqCheckbox = document.createElement('input');
       reqCheckbox.type = 'checkbox';
@@ -956,27 +1117,52 @@
       tdReq.appendChild(reqCheckbox);
       tr.appendChild(tdReq);
 
-      // Delete
+      // Delete cell
       var tdDel = document.createElement('td');
       var delBtn = document.createElement('button');
       delBtn.className = 'delete-field-btn';
       delBtn.textContent = '✕';
       delBtn.addEventListener('click', function() {
-        var currentName = nameInput.value.trim();
-        if (currentName && propertyDefs[currentName]) {
-          delete propertyDefs[currentName];
-        }
+        var currentPath = tr.getAttribute('data-path');
+        removeChildren(currentPath);
+        delete propertyDefs[currentPath];
         tr.remove();
       });
       tdDel.appendChild(delBtn);
       tr.appendChild(tdDel);
 
-      tbody.appendChild(tr);
-
-      return { updateOthersSummary: updateOthersSummary };
+      return tr;
     }
 
-    rows.forEach(function(r) { addJsonRow(r); });
+    // Recursively add rows from schema
+    function addRowsFromSchema(properties, requiredList, parentPath, depth, isHidden) {
+      if (!properties) return;
+      Object.keys(properties).forEach(function(name) {
+        var prop = properties[name];
+        var path = parentPath ? parentPath + '.' + name : name;
+        var isRequired = requiredList && requiredList.indexOf(name) !== -1;
+
+        var row = addTreeRow({
+          name: name,
+          type: prop.type || 'string',
+          description: prop.description || '',
+          required: isRequired,
+          others: prop
+        }, path, depth, parentPath, isHidden);
+        tbody.appendChild(row);
+
+        // Recursively add nested properties
+        var nested = getNestedProperties(prop);
+        if (nested && nested.properties) {
+          addRowsFromSchema(nested.properties, nested.required, path, depth + 1, true);
+        }
+      });
+    }
+
+    // Initialize from existing schema
+    if (schema && schema.properties) {
+      addRowsFromSchema(schema.properties, schema.required || [], '', 0, false);
+    }
 
     container.appendChild(table);
 
@@ -987,10 +1173,74 @@
     addBtn.className = 'add-param-btn';
     addBtn.textContent = '+ Add Field';
     addBtn.addEventListener('click', function() {
-      addJsonRow({ name: '', type: 'string', description: '', required: false, others: { type: 'string' } });
+      var newPath = 'newField' + Date.now();
+      var row = addTreeRow(
+        { name: '', type: 'string', description: '', required: false, others: { type: 'string' } },
+        newPath, 0, '', false
+      );
+      tbody.appendChild(row);
+      var nameInput = row.querySelector('.tree-name-input');
+      if (nameInput) nameInput.focus();
     });
     addRow.appendChild(addBtn);
     container.appendChild(addRow);
+
+    // Collect schema from tree rows (recursive)
+    function collectSchemaFromRows() {
+      var rootSchema = { type: 'object', properties: {}, required: [] };
+
+      function collectChildren(parentPath, targetProps, targetRequired) {
+        var selector = parentPath ? 'tr[data-parent="' + parentPath + '"]' : 'tr[data-depth="0"]';
+        var rows = tbody.querySelectorAll(selector);
+
+        rows.forEach(function(row) {
+          var path = row.getAttribute('data-path');
+          var nameInput = row.querySelector('.tree-name-input');
+          var typeSelect = row.querySelector('select');
+          var reqCheckbox = row.querySelector('input[type="checkbox"]');
+          var descInput = row.querySelectorAll('input[type="text"]')[1];
+
+          var name = nameInput ? nameInput.value.trim() : '';
+          if (!name) return;
+
+          var type = typeSelect ? typeSelect.value : 'string';
+          var isRequired = reqCheckbox ? reqCheckbox.checked : false;
+          var description = descInput ? descInput.value.trim() : '';
+
+          // Get base property definition
+          var prop = propertyDefs[path] ? Object.assign({}, propertyDefs[path]) : { type: type };
+          prop.type = type;
+          if (description) {
+            prop.description = description;
+          } else {
+            delete prop.description;
+          }
+
+          // Check for children
+          var childRows = tbody.querySelectorAll('tr[data-parent="' + path + '"]');
+          if (childRows.length > 0) {
+            if (type === 'object') {
+              prop.properties = {};
+              prop.required = [];
+              collectChildren(path, prop.properties, prop.required);
+              if (prop.required.length === 0) delete prop.required;
+            } else if (type === 'array') {
+              prop.items = { type: 'object', properties: {}, required: [] };
+              collectChildren(path, prop.items.properties, prop.items.required);
+              if (prop.items.required.length === 0) delete prop.items.required;
+            }
+          }
+
+          targetProps[name] = prop;
+          if (isRequired) targetRequired.push(name);
+        });
+      }
+
+      collectChildren('', rootSchema.properties, rootSchema.required);
+      if (rootSchema.required.length === 0) delete rootSchema.required;
+
+      return rootSchema;
+    }
 
     // Set up header save button for JSON type
     var headerSaveBtn = document.getElementById('body-tab-save-btn');
@@ -999,30 +1249,7 @@
       newBtn.id = 'body-tab-save-btn';
       headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
       newBtn.addEventListener('click', function() {
-        var properties = {};
-        var required = [];
-        tbody.querySelectorAll('tr').forEach(function(tr) {
-          var inputs = tr.querySelectorAll('input');
-          var selects = tr.querySelectorAll('select');
-          var name = inputs[0].value.trim();
-          if (!name) return;
-          var type = selects[0].value;
-          var isRequired = inputs[1].checked;
-          var description = inputs[2].value.trim();
-
-          // Get full property definition from propertyDefs
-          var prop = propertyDefs[name] ? Object.assign({}, propertyDefs[name]) : { type: type };
-          prop.type = type;
-          if (description) {
-            prop.description = description;
-          } else {
-            delete prop.description;
-          }
-          properties[name] = prop;
-          if (isRequired) required.push(name);
-        });
-        var schemaObj = { type: 'object', properties: properties };
-        if (required.length > 0) schemaObj.required = required;
+        var schemaObj = collectSchemaFromRows();
         var content = {};
         content[contentType] = { schema: schemaObj };
         S._saveRequestBody({ content: content });

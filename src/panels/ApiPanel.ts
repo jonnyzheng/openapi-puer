@@ -540,6 +540,9 @@ export class ApiPanel {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'styles.css')
     );
+    const tailwindUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'tailwind.css')
+    );
     const prismCssUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'themes', 'prism-tomorrow.css')
     );
@@ -578,6 +581,7 @@ export class ApiPanel {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <link href="${prismCssUri}" rel="stylesheet">
   <link href="${styleUri}" rel="stylesheet">
+  <link href="${tailwindUri}" rel="stylesheet">
   <title>OpenAPI Puer</title>
 </head>
 <body>
