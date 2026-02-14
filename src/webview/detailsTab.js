@@ -620,6 +620,10 @@
     var endpoint = S.currentEndpoint;
     S._currentBodyType = detectBodyType(endpoint);
 
+    // Top row with type selector and save button
+    var topRow = document.createElement('div');
+    topRow.className = 'body-tab-header';
+
     // Type selector
     var selector = document.createElement('div');
     selector.className = 'body-type-selector';
@@ -633,11 +637,21 @@
         selector.querySelectorAll('.body-type-btn').forEach(function(b) {
           b.classList.toggle('active', b.textContent === type);
         });
-        S._renderBodyContent(editorArea, type, true);
+        // Don't auto-save when switching tabs - user must click Save button
+        S._renderBodyContent(editorArea, type, false);
       });
       selector.appendChild(btn);
     });
-    container.appendChild(selector);
+    topRow.appendChild(selector);
+
+    // Save button in the header row
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'body-header-save-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.id = 'body-tab-save-btn';
+    topRow.appendChild(saveBtn);
+
+    container.appendChild(topRow);
 
     // Editor area
     var editorArea = document.createElement('div');
@@ -651,16 +665,57 @@
     container.innerHTML = '';
     var endpoint = S.currentEndpoint;
 
+    // Get the header save button
+    var headerSaveBtn = document.getElementById('body-tab-save-btn');
+
     if (type === 'none') {
-      container.innerHTML = '<div class="no-content">This request does not have a body</div>';
-      if (save) {
-        S._saveRequestBody(null);
+      var noContentDiv = document.createElement('div');
+      noContentDiv.className = 'no-content';
+      noContentDiv.textContent = 'This request does not have a body';
+      container.appendChild(noContentDiv);
+
+      // Set up header save button for 'none' type
+      if (headerSaveBtn) {
+        var newBtn = headerSaveBtn.cloneNode(true);
+        newBtn.id = 'body-tab-save-btn';
+        headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
+        newBtn.addEventListener('click', function() {
+          S._saveRequestBody(null);
+        });
       }
       return;
     }
 
     var contentType = BODY_TYPE_MAP[type];
-    var existingMedia = endpoint.requestBody && endpoint.requestBody.content && endpoint.requestBody.content[contentType];
+    var existingMedia = null;
+
+    // Try to get the media for the selected content type
+    if (endpoint.requestBody && endpoint.requestBody.content) {
+      // First, try exact match
+      existingMedia = endpoint.requestBody.content[contentType];
+
+      // If not found, try to find a matching content type (handles cases like 'application/json; charset=utf-8')
+      if (!existingMedia) {
+        var keys = Object.keys(endpoint.requestBody.content);
+        for (var i = 0; i < keys.length; i++) {
+          if (keys[i].indexOf(contentType) === 0 || contentType.indexOf(keys[i]) === 0) {
+            existingMedia = endpoint.requestBody.content[keys[i]];
+            break;
+          }
+        }
+      }
+
+      // If still not found and this is the detected body type, use the first available content
+      if (!existingMedia) {
+        var detectedType = detectBodyType(endpoint);
+        if (type === detectedType) {
+          var keys = Object.keys(endpoint.requestBody.content);
+          if (keys.length > 0) {
+            existingMedia = endpoint.requestBody.content[keys[0]];
+          }
+        }
+      }
+    }
 
     if (type === 'json') {
       S._renderJsonBodyEditor(container, existingMedia);
@@ -674,7 +729,16 @@
   };
 
   S._saveRequestBody = function(requestBody) {
-    if (!S.currentEndpoint) return;
+    if (!S.currentEndpoint) {
+      console.error('[_saveRequestBody] No currentEndpoint');
+      return;
+    }
+    console.log('[_saveRequestBody] Saving:', {
+      filePath: S.currentEndpoint.filePath,
+      path: S.currentEndpoint.path,
+      method: S.currentEndpoint.method,
+      requestBody: requestBody
+    });
     S.currentEndpoint.requestBody = requestBody;
     S.vscode.postMessage({
       type: 'updateRequestBody',
@@ -710,19 +774,6 @@
     var schema = existingMedia && existingMedia.schema ? existingMedia.schema : {};
     var escapeHtml = S.escapeHtml;
     var renderSchema = S.renderSchema;
-
-    // Schema viewer (read-only)
-    if (schema && Object.keys(schema).length > 0 && !schema.$ref) {
-
-      var viewer = document.createElement('div');
-      viewer.className = 'schema-viewer';
-      viewer.innerHTML = renderSchema(schema);
-      container.appendChild(viewer);
-
-      var spacer = document.createElement('div');
-      spacer.style.height = '12px';
-      container.appendChild(spacer);
-    }
 
 
     // JSON editor with Prism.js highlighting
@@ -773,20 +824,23 @@
 
     container.appendChild(editorWrapper);
 
-    var saveBtn = document.createElement('button');
-    saveBtn.className = 'body-save-btn';
-    saveBtn.textContent = 'Save Schema';
-    saveBtn.addEventListener('click', function() {
-      try {
-        var parsed = JSON.parse(textarea.value);
-        var content = {};
-        content['application/json'] = { schema: parsed };
-        S._saveRequestBody({ content: content });
-      } catch (e) {
-        alert('Invalid JSON: ' + e.message);
-      }
-    });
-    container.appendChild(saveBtn);
+    // Set up header save button for JSON type
+    var headerSaveBtn = document.getElementById('body-tab-save-btn');
+    if (headerSaveBtn) {
+      var newBtn = headerSaveBtn.cloneNode(true);
+      newBtn.id = 'body-tab-save-btn';
+      headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
+      newBtn.addEventListener('click', function() {
+        try {
+          var parsed = JSON.parse(textarea.value);
+          var content = {};
+          content['application/json'] = { schema: parsed };
+          S._saveRequestBody({ content: content });
+        } catch (e) {
+          alert('Invalid JSON: ' + e.message);
+        }
+      });
+    }
 
     // Initial highlight
     updateHighlight();
@@ -803,18 +857,21 @@
     }
     container.appendChild(textarea);
 
-    var saveBtn = document.createElement('button');
-    saveBtn.className = 'body-save-btn';
-    saveBtn.textContent = 'Save';
-    saveBtn.addEventListener('click', function() {
-      var content = {};
-      content['text/plain'] = {};
-      if (textarea.value.trim()) {
-        content['text/plain'].example = textarea.value;
-      }
-      S._saveRequestBody({ content: content });
-    });
-    container.appendChild(saveBtn);
+    // Set up header save button for raw type
+    var headerSaveBtn = document.getElementById('body-tab-save-btn');
+    if (headerSaveBtn) {
+      var newBtn = headerSaveBtn.cloneNode(true);
+      newBtn.id = 'body-tab-save-btn';
+      headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
+      newBtn.addEventListener('click', function() {
+        var content = {};
+        content['text/plain'] = {};
+        if (textarea.value.trim()) {
+          content['text/plain'].example = textarea.value;
+        }
+        S._saveRequestBody({ content: content });
+      });
+    }
   };
 
   // Key-value body editor (form-data / x-www-form-urlencoded)
@@ -925,26 +982,28 @@
     addRow.appendChild(addBtn);
     container.appendChild(addRow);
 
-    // Save button
-    var saveBtn = document.createElement('button');
-    saveBtn.className = 'body-save-btn';
-    saveBtn.textContent = 'Save';
-    saveBtn.addEventListener('click', function() {
-      var kvRows = [];
-      tbody.querySelectorAll('tr').forEach(function(tr) {
-        var inputs = tr.querySelectorAll('input');
-        var selects = tr.querySelectorAll('select');
-        var name = inputs[0].value.trim();
-        if (!name) return;
-        var type = isFormData ? selects[0].value : 'string';
-        var required = isFormData ? inputs[1].checked : inputs[1].checked;
-        var description = isFormData ? inputs[2].value.trim() : inputs[2].value.trim();
-        var format = (type === 'file') ? 'binary' : undefined;
-        kvRows.push({ name: name, type: type === 'file' ? 'string' : type, description: description, required: required, format: format });
+    // Set up header save button for form types
+    var headerSaveBtn = document.getElementById('body-tab-save-btn');
+    if (headerSaveBtn) {
+      var newBtn = headerSaveBtn.cloneNode(true);
+      newBtn.id = 'body-tab-save-btn';
+      headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
+      newBtn.addEventListener('click', function() {
+        var kvRows = [];
+        tbody.querySelectorAll('tr').forEach(function(tr) {
+          var inputs = tr.querySelectorAll('input');
+          var selects = tr.querySelectorAll('select');
+          var name = inputs[0].value.trim();
+          if (!name) return;
+          var type = isFormData ? selects[0].value : 'string';
+          var required = isFormData ? inputs[1].checked : inputs[1].checked;
+          var description = isFormData ? inputs[2].value.trim() : inputs[2].value.trim();
+          var format = (type === 'file') ? 'binary' : undefined;
+          kvRows.push({ name: name, type: type === 'file' ? 'string' : type, description: description, required: required, format: format });
+        });
+        S._saveRequestBody(S._buildKvRequestBody(contentType, kvRows));
       });
-      S._saveRequestBody(S._buildKvRequestBody(contentType, kvRows));
-    });
-    container.appendChild(saveBtn);
+    }
   };
 
   S.saveParameter = function(paramIndex, field, value) {

@@ -180,6 +180,47 @@ window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
   }
 };
 
+// Generate empty template from schema (fields with empty values)
+window.OpenAPIPuer.generateEmptyTemplateFromSchema = function(schema) {
+  const generateEmptyTemplateFromSchema = window.OpenAPIPuer.generateEmptyTemplateFromSchema;
+  if (!schema) return null;
+
+  // If schema has properties but no type, treat it as object
+  if (schema.properties && !schema.type) {
+    const obj = {};
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      obj[key] = generateEmptyTemplateFromSchema(prop);
+    }
+    return obj;
+  }
+
+  switch (schema.type) {
+    case 'object':
+      const obj = {};
+      if (schema.properties) {
+        for (const [key, prop] of Object.entries(schema.properties)) {
+          obj[key] = generateEmptyTemplateFromSchema(prop);
+        }
+      }
+      return obj;
+    case 'array':
+      return [];
+    case 'string':
+      return '';
+    case 'number':
+    case 'integer':
+      return null;
+    case 'boolean':
+      return null;
+    default:
+      // If no type but has other properties, return empty object
+      if (Object.keys(schema).length > 0) {
+        return {};
+      }
+      return null;
+  }
+};
+
 window.OpenAPIPuer.highlightJson = function(jsonStr) {
   // Use Prism.js for JSON syntax highlighting
   if (typeof Prism !== 'undefined' && Prism.languages.json) {

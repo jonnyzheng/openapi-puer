@@ -628,7 +628,35 @@
     }
 
     var contentType = REQ_BODY_TYPE_MAP[type];
-    var existingMedia = endpoint.requestBody && endpoint.requestBody.content && endpoint.requestBody.content[contentType];
+    var existingMedia = null;
+
+    // Try to get the media for the selected content type
+    if (endpoint.requestBody && endpoint.requestBody.content) {
+      // First, try exact match
+      existingMedia = endpoint.requestBody.content[contentType];
+
+      // If not found, try to find a matching content type
+      if (!existingMedia) {
+        var keys = Object.keys(endpoint.requestBody.content);
+        for (var i = 0; i < keys.length; i++) {
+          if (keys[i].indexOf(contentType) === 0 || contentType.indexOf(keys[i]) === 0) {
+            existingMedia = endpoint.requestBody.content[keys[i]];
+            break;
+          }
+        }
+      }
+
+      // If still not found and this is the detected body type, use the first available content
+      if (!existingMedia) {
+        var detectedType = detectRequestBodyType(endpoint);
+        if (type === detectedType) {
+          var keys = Object.keys(endpoint.requestBody.content);
+          if (keys.length > 0) {
+            existingMedia = endpoint.requestBody.content[keys[0]];
+          }
+        }
+      }
+    }
 
     if (type === 'json') {
       S._renderRequestJsonBodyEditor(container, existingMedia, endpoint);
@@ -647,23 +675,6 @@
     var escapeHtml = S.escapeHtml;
     var renderSchema = S.renderSchema;
 
-    // Schema viewer (read-only)
-    if (schema && Object.keys(schema).length > 0 && !schema.$ref) {
-      var viewerLabel = document.createElement('div');
-      viewerLabel.style.cssText = 'font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:4px;';
-      viewerLabel.textContent = 'Schema Preview';
-      container.appendChild(viewerLabel);
-
-      var viewer = document.createElement('div');
-      viewer.className = 'schema-viewer';
-      viewer.innerHTML = renderSchema(schema);
-      container.appendChild(viewer);
-
-      var spacer = document.createElement('div');
-      spacer.style.height = '12px';
-      container.appendChild(spacer);
-    }
-
 
     // JSON editor with Prism.js highlighting
     var editorWrapper = document.createElement('div');
@@ -672,10 +683,10 @@
     var textarea = document.createElement('textarea');
     textarea.className = 'body-editor-area';
     textarea.id = 'request-body-json-editor';
-    // Generate sample from schema if available
+    // Generate empty template from schema if available
     if (schema && Object.keys(schema).length > 0) {
-      var sample = S.generateSampleFromSchema(schema);
-      textarea.value = JSON.stringify(sample, null, 2);
+      var template = S.generateEmptyTemplateFromSchema(schema);
+      textarea.value = JSON.stringify(template, null, 2);
     } else {
       textarea.value = '';
     }

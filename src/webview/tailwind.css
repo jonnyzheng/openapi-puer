@@ -2832,3 +2832,34 @@ td.no-params-message {
   word-break: break-all;
   max-width: 200px;
 }
+
+/* Body tab header with save button */
+.body-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.body-tab-header .body-type-selector {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.body-header-save-btn {
+  padding: 5px 14px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.body-header-save-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}

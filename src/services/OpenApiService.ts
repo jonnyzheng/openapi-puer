@@ -390,20 +390,15 @@ export class OpenApiService {
     const resolved = this.resolveRef(schema, spec) as OpenAPIV3.SchemaObject | OpenAPIV2.SchemaObject;
     if (!resolved) return undefined;
 
-    const result: SchemaObject = {
-      type: resolved.type as string,
-      format: resolved.format,
-      description: resolved.description,
-      enum: resolved.enum,
-      default: resolved.default,
-      example: resolved.example
-    };
+    // Start with a shallow copy of all properties to preserve any custom/unknown fields
+    const result: SchemaObject = { ...resolved } as SchemaObject;
 
     // Preserve the component name if this was a $ref
     if (refName) {
       result.$ref = refName;
     }
 
+    // Recursively process nested properties
     if (resolved.properties) {
       result.properties = {};
       for (const [key, value] of Object.entries(resolved.properties)) {
@@ -411,59 +406,9 @@ export class OpenApiService {
       }
     }
 
+    // Recursively process array items
     if ('items' in resolved && resolved.items) {
       result.items = this.extractSchema(resolved.items as OpenAPIV3.SchemaObject, spec);
-    }
-
-    if (resolved.required) {
-      result.required = resolved.required;
-    }
-
-    const v3Schema = resolved as OpenAPIV3.SchemaObject;
-    if (v3Schema.nullable !== undefined) {
-      result.nullable = v3Schema.nullable;
-    }
-    if (v3Schema.readOnly !== undefined) {
-      result.readOnly = v3Schema.readOnly;
-    }
-    if (v3Schema.writeOnly !== undefined) {
-      result.writeOnly = v3Schema.writeOnly;
-    }
-
-    // Additional schema fields
-    const anyResolved = resolved as Record<string, unknown>;
-    if (anyResolved.deprecated !== undefined) {
-      result.deprecated = anyResolved.deprecated as boolean;
-    }
-    if (anyResolved.pattern !== undefined) {
-      result.pattern = anyResolved.pattern as string;
-    }
-    if (anyResolved.minLength !== undefined) {
-      result.minLength = anyResolved.minLength as number;
-    }
-    if (anyResolved.maxLength !== undefined) {
-      result.maxLength = anyResolved.maxLength as number;
-    }
-    if (anyResolved.minimum !== undefined) {
-      result.minimum = anyResolved.minimum as number;
-    }
-    if (anyResolved.maximum !== undefined) {
-      result.maximum = anyResolved.maximum as number;
-    }
-    if (anyResolved.exclusiveMinimum !== undefined) {
-      result.exclusiveMinimum = anyResolved.exclusiveMinimum as boolean | number;
-    }
-    if (anyResolved.exclusiveMaximum !== undefined) {
-      result.exclusiveMaximum = anyResolved.exclusiveMaximum as boolean | number;
-    }
-    if (anyResolved.minItems !== undefined) {
-      result.minItems = anyResolved.minItems as number;
-    }
-    if (anyResolved.maxItems !== undefined) {
-      result.maxItems = anyResolved.maxItems as number;
-    }
-    if (anyResolved.uniqueItems !== undefined) {
-      result.uniqueItems = anyResolved.uniqueItems as boolean;
     }
 
     return result;
@@ -926,16 +871,21 @@ export class OpenApiService {
     requestBody: object | null
   ): Promise<{ success: boolean; message?: string }> {
     try {
+      this.outputChannel.appendLine(`[updateRequestBody] filePath: ${filePath}, path: ${endpointPath}, method: ${method}`);
+      this.outputChannel.appendLine(`[updateRequestBody] requestBody: ${JSON.stringify(requestBody)}`);
+
       const content = await fs.promises.readFile(filePath, 'utf-8');
       const spec = JSON.parse(content);
 
       const pathObj = spec.paths?.[endpointPath];
       if (!pathObj) {
+        this.outputChannel.appendLine(`[updateRequestBody] Path not found: ${endpointPath}`);
         return { success: false, message: `Path ${endpointPath} not found in spec` };
       }
 
       const operation = pathObj[method.toLowerCase()];
       if (!operation) {
+        this.outputChannel.appendLine(`[updateRequestBody] Method not found: ${method}`);
         return { success: false, message: `Method ${method} not found on path ${endpointPath}` };
       }
 
@@ -948,6 +898,7 @@ export class OpenApiService {
       const updatedContent = JSON.stringify(spec, null, 2);
       await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
 
+      this.outputChannel.appendLine(`[updateRequestBody] Successfully saved to ${filePath}`);
       this.removeFromCache(filePath);
 
       return { success: true };
