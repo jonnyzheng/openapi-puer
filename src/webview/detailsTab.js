@@ -450,8 +450,14 @@
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      S.showDeleteConfirmDialog(param.name, () => {
-        S.deleteParameter(index, param.name, param.in);
+      S.showConfirmDialog({
+        title: 'Delete Parameter',
+        message: 'Are you sure you want to delete parameter <code>' + S.escapeHtml(param.name) + '</code>?',
+        confirmText: 'Delete',
+        confirmClass: 'server-dialog-delete',
+        onConfirm: function() {
+          S.deleteParameter(index, param.name, param.in);
+        }
       });
     });
     actionsCell.appendChild(deleteBtn);

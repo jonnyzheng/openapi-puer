@@ -124,54 +124,6 @@
     descInput.addEventListener('keydown', handleKeydown);
   };
 
-  S.showDeleteServerDialog = function(index, serverUrl) {
-    const escapeHtml = S.escapeHtml;
-    const overlay = document.createElement('div');
-    overlay.className = 'server-dialog-overlay';
-
-    const dialog = document.createElement('div');
-    dialog.className = 'server-dialog';
-
-    const title = document.createElement('h3');
-    title.textContent = 'Delete Server';
-
-    const message = document.createElement('p');
-    message.className = 'server-delete-message';
-    message.innerHTML = `Are you sure you want to delete this server?<br><code>${escapeHtml(serverUrl)}</code>`;
-
-    const buttons = document.createElement('div');
-    buttons.className = 'server-dialog-buttons';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'server-dialog-cancel';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.addEventListener('click', () => overlay.remove());
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'server-dialog-delete';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', () => {
-      const filePath = S.currentEndpoint?.filePath || S.currentFilePath;
-      S.vscode.postMessage({
-        type: 'deleteServer',
-        payload: {
-          filePath,
-          index
-        }
-      });
-      overlay.remove();
-    });
-
-    buttons.appendChild(cancelBtn);
-    buttons.appendChild(deleteBtn);
-
-    dialog.appendChild(title);
-    dialog.appendChild(message);
-    dialog.appendChild(buttons);
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-  };
-
   S.handleShowAddServer = function(filePath, servers) {
     S.currentFilePath = filePath;
     S.currentServers = servers || [];
@@ -254,7 +206,19 @@
       deleteBtn.textContent = 'Delete';
       deleteBtn.title = 'Delete this server';
       deleteBtn.addEventListener('click', () => {
-        S.showDeleteServerDialog(index, server.url);
+        S.showConfirmDialog({
+          title: 'Delete Server',
+          message: 'Are you sure you want to delete this server?<br><code>' + S.escapeHtml(server.url) + '</code>',
+          confirmText: 'Delete',
+          confirmClass: 'server-dialog-delete',
+          onConfirm: function() {
+            const filePath = S.currentEndpoint?.filePath || S.currentFilePath;
+            S.vscode.postMessage({
+              type: 'deleteServer',
+              payload: { filePath, index }
+            });
+          }
+        });
       });
 
       serverActions.appendChild(editBtn);
@@ -357,7 +321,21 @@
         deleteBtn.className = 'server-delete-btn';
         deleteBtn.textContent = 'Delete';
         deleteBtn.title = 'Delete this server';
-        deleteBtn.addEventListener('click', () => S.showDeleteServerDialog(index, server.url));
+        deleteBtn.addEventListener('click', () => {
+          S.showConfirmDialog({
+            title: 'Delete Server',
+            message: 'Are you sure you want to delete this server?<br><code>' + S.escapeHtml(server.url) + '</code>',
+            confirmText: 'Delete',
+            confirmClass: 'server-dialog-delete',
+            onConfirm: function() {
+              const filePath = S.currentEndpoint?.filePath || S.currentFilePath;
+              S.vscode.postMessage({
+                type: 'deleteServer',
+                payload: { filePath, index }
+              });
+            }
+          });
+        });
 
         buttonsContainer.appendChild(copyBtn);
         buttonsContainer.appendChild(useBtn);

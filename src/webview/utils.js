@@ -230,41 +230,95 @@ window.OpenAPIPuer.highlightJson = function(jsonStr) {
   return window.OpenAPIPuer.escapeHtml(jsonStr);
 };
 
-window.OpenAPIPuer.showDeleteConfirmDialog = function(paramName, onConfirm) {
-  const escapeHtml = window.OpenAPIPuer.escapeHtml;
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal-dialog">
-      <h4>Delete Parameter</h4>
-      <p>Are you sure you want to delete parameter "${escapeHtml(paramName)}"?</p>
-      <div class="modal-actions">
-        <button class="secondary-btn" id="cancel-delete">Cancel</button>
-        <button class="primary-btn" id="confirm-delete" style="background-color: var(--vscode-errorForeground);">Delete</button>
-      </div>
-    </div>
-  `;
+/**
+ * Reusable confirmation dialog
+ * @param {Object} options - Dialog options
+ * @param {string} options.title - Dialog title (default: 'Confirm Delete')
+ * @param {string} options.message - HTML message content
+ * @param {string} options.confirmText - Confirm button text (default: 'Delete')
+ * @param {string} options.confirmClass - Confirm button class (default: 'server-dialog-delete')
+ * @param {Function} options.onConfirm - Callback when confirmed
+ * @returns {void}
+ */
+window.OpenAPIPuer.showConfirmDialog = function(options) {
+  var escapeHtml = window.OpenAPIPuer.escapeHtml;
 
-  document.body.appendChild(modal);
+  // Support legacy signature: showConfirmDialog(message, onConfirm)
+  if (typeof options === 'string') {
+    options = {
+      title: 'Confirm Delete',
+      message: arguments[0],
+      confirmText: 'Delete',
+      confirmClass: 'server-dialog-delete',
+      onConfirm: arguments[1]
+    };
+  }
 
-  document.getElementById('cancel-delete').addEventListener('click', () => {
-    modal.remove();
+  // Set defaults
+  var title = options.title || 'Confirm Delete';
+  var message = options.message || '';
+  var confirmText = options.confirmText || 'Delete';
+  var confirmClass = options.confirmClass || 'server-dialog-delete';
+  var onConfirm = options.onConfirm || function() {};
+
+  var existingDialog = document.querySelector('.server-dialog-overlay');
+  if (existingDialog) existingDialog.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'server-dialog-overlay';
+
+  var dialog = document.createElement('div');
+  dialog.className = 'server-dialog';
+  dialog.style.minWidth = '400px';
+  dialog.style.maxWidth = '500px';
+
+  var titleEl = document.createElement('h3');
+  titleEl.textContent = title;
+  dialog.appendChild(titleEl);
+
+  var messageEl = document.createElement('p');
+  messageEl.className = 'server-delete-message';
+  messageEl.innerHTML = message;
+  dialog.appendChild(messageEl);
+
+  var buttons = document.createElement('div');
+  buttons.className = 'server-dialog-buttons';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'server-dialog-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', function() {
+    overlay.remove();
+  });
+  buttons.appendChild(cancelBtn);
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.className = confirmClass;
+  confirmBtn.textContent = confirmText;
+  confirmBtn.addEventListener('click', function() {
+    overlay.remove();
+    onConfirm();
+  });
+  buttons.appendChild(confirmBtn);
+
+  dialog.appendChild(buttons);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  // Focus cancel button for safety
+  cancelBtn.focus();
+
+  // Close on overlay click
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.remove();
   });
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
-  });
-
-  const handleEscape = (e) => {
+  // Close on Escape key
+  var handleEscape = function(e) {
     if (e.key === 'Escape') {
-      modal.remove();
+      overlay.remove();
       document.removeEventListener('keydown', handleEscape);
     }
   };
   document.addEventListener('keydown', handleEscape);
-
-  document.getElementById('confirm-delete').addEventListener('click', () => {
-    modal.remove();
-    onConfirm();
-  });
 };

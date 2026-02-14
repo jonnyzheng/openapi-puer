@@ -85,54 +85,7 @@
       }
     }
 
-    // Show custom confirmation dialog
-    function showConfirmDialog(message, onConfirm) {
-      var overlay = document.createElement('div');
-      overlay.className = 'server-dialog-overlay';
-
-      var dialog = document.createElement('div');
-      dialog.className = 'server-dialog';
-      dialog.style.minWidth = '400px';
-      dialog.style.maxWidth = '500px';
-
-      var title = document.createElement('h3');
-      title.textContent = 'Confirm Delete';
-      dialog.appendChild(title);
-
-      var messageEl = document.createElement('p');
-      messageEl.className = 'server-delete-message';
-      messageEl.innerHTML = message;
-      dialog.appendChild(messageEl);
-
-      var buttons = document.createElement('div');
-      buttons.className = 'server-dialog-buttons';
-
-      var cancelBtn = document.createElement('button');
-      cancelBtn.className = 'server-dialog-cancel';
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.addEventListener('click', function() {
-        overlay.remove();
-      });
-      buttons.appendChild(cancelBtn);
-
-      var confirmBtn = document.createElement('button');
-      confirmBtn.className = 'server-dialog-delete';
-      confirmBtn.textContent = 'Delete';
-      confirmBtn.addEventListener('click', function() {
-        overlay.remove();
-        onConfirm();
-      });
-      buttons.appendChild(confirmBtn);
-
-      dialog.appendChild(buttons);
-      overlay.appendChild(dialog);
-      document.body.appendChild(overlay);
-
-      // Focus cancel button for safety
-      cancelBtn.focus();
-    }
-
-    // Remove all children of a row
+    // Toggle children visibility
     function removeChildren(path) {
       // Find direct children and descendants
       // Match data-parent that equals path exactly OR starts with path + "."
@@ -219,15 +172,18 @@
         nameCell.appendChild(indent);
       }
 
-      // Chevron for expandable items
+      // Chevron for expandable items - auto-expand by default if has children
       var chevron = document.createElement('span');
-      chevron.className = 'schema-chevron' + (hasChildren ? '' : ' placeholder');
+      chevron.className = 'schema-chevron' + (hasChildren ? ' expanded' : ' placeholder');
       chevron.textContent = '\u25B6'; // ▶
       if (hasChildren) {
+        tr.setAttribute('data-expanded', 'true');
         chevron.addEventListener('click', function(e) {
           e.stopPropagation();
           toggleChildren(tr);
         });
+      } else {
+        tr.setAttribute('data-expanded', 'false');
       }
       nameCell.appendChild(chevron);
 
@@ -484,7 +440,7 @@
           if (childCount > 0) {
             message += '<br><br>This will also delete ' + childCount + ' nested field' + (childCount > 1 ? 's' : '') + '.';
           }
-          showConfirmDialog(message, function() {
+          window.OpenAPIPuer.showConfirmDialog(message, function() {
             removeChildren(currentPath);
             delete propertyDefs[currentPath];
             tr.remove();
@@ -515,10 +471,10 @@
         }, path, depth, parentPath, isHidden);
         tbody.appendChild(row);
 
-        // Recursively add nested properties
+        // Recursively add nested properties - visible by default since parent is expanded
         var nested = getNestedProperties(prop);
         if (nested && nested.properties) {
-          addRowsFromSchema(nested.properties, nested.required, path, depth + 1, true);
+          addRowsFromSchema(nested.properties, nested.required, path, depth + 1, false);
         }
       });
     }
