@@ -66,6 +66,7 @@ Press `F5` in VS Code to launch the Extension Development Host.
 - Keep the code modular and maintainable, with clear separation of concerns between different services and components.
 - Write unit tests for critical services and integration tests for the extension as a whole.
 - keep the same behavior of the edit,delete, add operations for api items in the GUI of OpenAPI Puer.
+- use tailwindcss for styling the webview components, and follow the existing design patterns in the current version of OpenAPI Puer.
 
 ## UI Rules
 

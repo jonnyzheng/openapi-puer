@@ -769,60 +769,228 @@
     return { content: content };
   };
 
-  // JSON body editor
+  // JSON body editor - GUI table for schema properties
   S._renderJsonBodyEditor = function(container, existingMedia) {
     var schema = existingMedia && existingMedia.schema ? existingMedia.schema : {};
-    var escapeHtml = S.escapeHtml;
-    var renderSchema = S.renderSchema;
+    var contentType = 'application/json';
 
-
-    // JSON editor with Prism.js highlighting
-    var editorWrapper = document.createElement('div');
-    editorWrapper.className = 'json-editor-wrapper';
-
-    var textarea = document.createElement('textarea');
-    textarea.className = 'body-editor-area';
-    textarea.value = JSON.stringify(schema, null, 2);
-    textarea.placeholder = '{\n  "type": "object",\n  "properties": {}\n}';
-
-    // Highlight on initial render and on input
-    function updateHighlight() {
-      if (typeof Prism !== 'undefined' && Prism.languages.json) {
-        try {
-          var json = textarea.value;
-          // Create a highlighted version
-          var highlighted = Prism.highlight(json, Prism.languages.json, 'json');
-          var codeElement = document.getElementById('details-schema-json-highlight');
-          if (codeElement) {
-            codeElement.innerHTML = highlighted;
-            codeElement.className = 'language-json';
-          }
-        } catch (e) {
-          // Ignore invalid JSON for highlighting
-        }
-      }
+    // Extract existing fields from schema properties
+    var rows = [];
+    if (schema && schema.properties) {
+      var props = schema.properties;
+      var requiredList = schema.required || [];
+      Object.keys(props).forEach(function(name) {
+        var p = props[name];
+        rows.push({
+          name: name,
+          type: p.type || 'string',
+          description: p.description || '',
+          required: requiredList.indexOf(name) !== -1,
+          others: p // Keep full property definition for Others column
+        });
+      });
     }
 
-    textarea.addEventListener('input', updateHighlight);
+    var table = document.createElement('table');
+    table.className = 'body-kv-table';
 
-    // Create highlighted code display
-    var highlightPre = document.createElement('pre');
-    highlightPre.className = 'json-highlight-pre';
-    var highlightCode = document.createElement('code');
-    highlightCode.id = 'details-schema-json-highlight';
-    highlightCode.className = 'language-json';
-    highlightPre.appendChild(highlightCode);
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Name</th><th>Type</th><th>Description</th><th>Others</th><th>Required</th><th></th></tr>';
+    table.appendChild(thead);
 
-    editorWrapper.appendChild(highlightPre);
-    editorWrapper.appendChild(textarea);
+    var tbody = document.createElement('tbody');
+    table.appendChild(tbody);
 
-    // Sync scroll positions
-    textarea.addEventListener('scroll', function() {
-      highlightPre.scrollTop = textarea.scrollTop;
-      highlightPre.scrollLeft = textarea.scrollLeft;
+    // Store property definitions for Others editing
+    var propertyDefs = {};
+
+    function addJsonRow(data) {
+      var tr = document.createElement('tr');
+      var propName = data.name || '';
+
+      // Store property definition
+      if (propName) {
+        propertyDefs[propName] = data.others || { type: data.type || 'string' };
+      }
+
+      // Name
+      var tdName = document.createElement('td');
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = propName;
+      nameInput.placeholder = 'field name';
+      nameInput.addEventListener('change', function() {
+        // Update propertyDefs when name changes
+        var oldName = propName;
+        var newName = nameInput.value.trim();
+        if (oldName && propertyDefs[oldName]) {
+          propertyDefs[newName] = propertyDefs[oldName];
+          delete propertyDefs[oldName];
+        }
+        propName = newName;
+      });
+      tdName.appendChild(nameInput);
+      tr.appendChild(tdName);
+
+      // Type
+      var tdType = document.createElement('td');
+      var typeSelect = document.createElement('select');
+      ['string', 'integer', 'number', 'boolean', 'array', 'object'].forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        if (t === (data.type || 'string')) opt.selected = true;
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.addEventListener('change', function() {
+        if (propName && propertyDefs[propName]) {
+          propertyDefs[propName].type = typeSelect.value;
+        }
+      });
+      tdType.appendChild(typeSelect);
+      tr.appendChild(tdType);
+
+      // Description
+      var tdDesc = document.createElement('td');
+      var descInput = document.createElement('input');
+      descInput.type = 'text';
+      descInput.value = data.description || '';
+      descInput.placeholder = 'description';
+      descInput.addEventListener('change', function() {
+        if (propName && propertyDefs[propName]) {
+          propertyDefs[propName].description = descInput.value;
+        }
+      });
+      tdDesc.appendChild(descInput);
+      tr.appendChild(tdDesc);
+
+      // Others cell - clickable summary with tooltip
+      var tdOthers = document.createElement('td');
+      tdOthers.className = 'others-cell';
+      var othersSpan = document.createElement('span');
+
+      function updateOthersSummary() {
+        var propDef = propertyDefs[propName] || {};
+        var summary = S.getOthersSummary ? S.getOthersSummary(propDef) : '—';
+        if (summary === '—') {
+          othersSpan.className = 'others-placeholder';
+          othersSpan.textContent = '—';
+        } else {
+          othersSpan.className = 'others-summary';
+          othersSpan.textContent = summary;
+        }
+      }
+      updateOthersSummary();
+      tdOthers.appendChild(othersSpan);
+
+      // Tooltip on hover
+      (function(cell, getPropDef) {
+        var tooltip = null;
+        cell.addEventListener('mouseenter', function() {
+          var propDef = getPropDef();
+          var details = S.getOthersDetails ? S.getOthersDetails(propDef) : [];
+          if (details.length === 0) return;
+
+          tooltip = document.createElement('div');
+          tooltip.className = 'others-tooltip';
+
+          var tooltipTable = document.createElement('table');
+          tooltipTable.className = 'others-tooltip-table';
+          for (var i = 0; i < details.length; i++) {
+            var tooltipTr = document.createElement('tr');
+            var tdKey = document.createElement('td');
+            tdKey.className = 'others-tooltip-key';
+            tdKey.textContent = details[i].key;
+            var tdVal = document.createElement('td');
+            tdVal.className = 'others-tooltip-value';
+            tdVal.textContent = details[i].value;
+            tooltipTr.appendChild(tdKey);
+            tooltipTr.appendChild(tdVal);
+            tooltipTable.appendChild(tooltipTr);
+          }
+          tooltip.appendChild(tooltipTable);
+          cell.appendChild(tooltip);
+
+          // Position: ensure tooltip stays within viewport
+          var tipRect = tooltip.getBoundingClientRect();
+          if (tipRect.right > window.innerWidth) {
+            tooltip.style.left = 'auto';
+            tooltip.style.right = '0';
+          }
+          if (tipRect.bottom > window.innerHeight) {
+            tooltip.style.top = 'auto';
+            tooltip.style.bottom = '100%';
+            tooltip.style.marginBottom = '4px';
+            tooltip.style.marginTop = '0';
+          }
+        });
+        cell.addEventListener('mouseleave', function() {
+          if (tooltip && tooltip.parentNode) {
+            tooltip.parentNode.removeChild(tooltip);
+            tooltip = null;
+          }
+        });
+      })(tdOthers, function() { return propertyDefs[propName] || {}; });
+
+      // Click to edit Others
+      tdOthers.addEventListener('click', function() {
+        var currentName = nameInput.value.trim();
+        if (!currentName) {
+          alert('Please enter a field name first');
+          return;
+        }
+        S._showBodyPropertyDetailDialog(currentName, propertyDefs[currentName] || { type: typeSelect.value }, function(updatedDef) {
+          propertyDefs[currentName] = updatedDef;
+          typeSelect.value = updatedDef.type || 'string';
+          descInput.value = updatedDef.description || '';
+          updateOthersSummary();
+        });
+      });
+      tr.appendChild(tdOthers);
+
+      // Required
+      var tdReq = document.createElement('td');
+      var reqCheckbox = document.createElement('input');
+      reqCheckbox.type = 'checkbox';
+      reqCheckbox.checked = data.required || false;
+      tdReq.appendChild(reqCheckbox);
+      tr.appendChild(tdReq);
+
+      // Delete
+      var tdDel = document.createElement('td');
+      var delBtn = document.createElement('button');
+      delBtn.className = 'delete-field-btn';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function() {
+        var currentName = nameInput.value.trim();
+        if (currentName && propertyDefs[currentName]) {
+          delete propertyDefs[currentName];
+        }
+        tr.remove();
+      });
+      tdDel.appendChild(delBtn);
+      tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+
+      return { updateOthersSummary: updateOthersSummary };
+    }
+
+    rows.forEach(function(r) { addJsonRow(r); });
+
+    container.appendChild(table);
+
+    // Add field button
+    var addRow = document.createElement('div');
+    addRow.className = 'add-param-row';
+    var addBtn = document.createElement('button');
+    addBtn.className = 'add-param-btn';
+    addBtn.textContent = '+ Add Field';
+    addBtn.addEventListener('click', function() {
+      addJsonRow({ name: '', type: 'string', description: '', required: false, others: { type: 'string' } });
     });
-
-    container.appendChild(editorWrapper);
+    addRow.appendChild(addBtn);
+    container.appendChild(addRow);
 
     // Set up header save button for JSON type
     var headerSaveBtn = document.getElementById('body-tab-save-btn');
@@ -831,19 +999,610 @@
       newBtn.id = 'body-tab-save-btn';
       headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
       newBtn.addEventListener('click', function() {
-        try {
-          var parsed = JSON.parse(textarea.value);
-          var content = {};
-          content['application/json'] = { schema: parsed };
-          S._saveRequestBody({ content: content });
-        } catch (e) {
-          alert('Invalid JSON: ' + e.message);
-        }
+        var properties = {};
+        var required = [];
+        tbody.querySelectorAll('tr').forEach(function(tr) {
+          var inputs = tr.querySelectorAll('input');
+          var selects = tr.querySelectorAll('select');
+          var name = inputs[0].value.trim();
+          if (!name) return;
+          var type = selects[0].value;
+          var isRequired = inputs[1].checked;
+          var description = inputs[2].value.trim();
+
+          // Get full property definition from propertyDefs
+          var prop = propertyDefs[name] ? Object.assign({}, propertyDefs[name]) : { type: type };
+          prop.type = type;
+          if (description) {
+            prop.description = description;
+          } else {
+            delete prop.description;
+          }
+          properties[name] = prop;
+          if (isRequired) required.push(name);
+        });
+        var schemaObj = { type: 'object', properties: properties };
+        if (required.length > 0) schemaObj.required = required;
+        var content = {};
+        content[contentType] = { schema: schemaObj };
+        S._saveRequestBody({ content: content });
       });
     }
+  };
 
-    // Initial highlight
-    updateHighlight();
+  // Sort order for all "others" fields
+  var BODY_FIELD_SORT_ORDER = {
+    'format': 1, 'example': 2, 'default': 3,
+    'enum': 10,
+    'pattern': 20, 'minLength': 21, 'maxLength': 22,
+    'minimum': 30, 'maximum': 31, 'exclusiveMinimum': 32, 'exclusiveMaximum': 33,
+    'minItems': 40, 'maxItems': 41, 'uniqueItems': 42,
+    'nullable': 50, 'deprecated': 51, 'readOnly': 52, 'writeOnly': 53
+  };
+
+  var BODY_SECTION_ORDER = {
+    'General': 0, 'Enum': 1, 'String Constraints': 2,
+    'Number Constraints': 3, 'Array Constraints': 4, 'Flags': 5
+  };
+
+  var BODY_FIELD_TO_SECTION = {
+    'format': 'General', 'example': 'General', 'default': 'General',
+    'enum': 'Enum',
+    'pattern': 'String Constraints', 'minLength': 'String Constraints', 'maxLength': 'String Constraints',
+    'minimum': 'Number Constraints', 'maximum': 'Number Constraints', 'exclusiveMinimum': 'Number Constraints', 'exclusiveMaximum': 'Number Constraints',
+    'minItems': 'Array Constraints', 'maxItems': 'Array Constraints', 'uniqueItems': 'Array Constraints',
+    'nullable': 'Flags', 'deprecated': 'Flags', 'readOnly': 'Flags', 'writeOnly': 'Flags'
+  };
+
+  // Dialog for editing property details (Others fields) - matches Schema Edit Property dialog
+  S._showBodyPropertyDetailDialog = function(propName, propDef, onSave) {
+    var existingDialog = document.querySelector('.server-dialog-overlay');
+    if (existingDialog) existingDialog.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'server-dialog-overlay';
+
+    var dialog = document.createElement('div');
+    dialog.className = 'server-dialog property-detail-dialog';
+
+    var title = document.createElement('h3');
+    title.textContent = 'Edit Property: ' + propName;
+
+    var inputs = {};
+    var deletedFields = {};
+    var sectionRows = {};
+
+    var table = document.createElement('table');
+    table.className = 'detail-table';
+
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Field</th><th>Value</th><th></th></tr>';
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+
+    // Helper: find the correct insertion point for a row based on sort order
+    var findInsertionPoint = function(fieldKey) {
+      var sortId = BODY_FIELD_SORT_ORDER[fieldKey] || 999;
+      var rows = tbody.querySelectorAll('tr[data-field-key]');
+      for (var i = 0; i < rows.length; i++) {
+        var existingKey = rows[i].getAttribute('data-field-key');
+        var existingSortId = BODY_FIELD_SORT_ORDER[existingKey] || 999;
+        if (existingSortId > sortId) {
+          var prev = rows[i].previousElementSibling;
+          if (prev && prev.classList.contains('detail-section-row')) {
+            var fieldSection = BODY_FIELD_TO_SECTION[fieldKey];
+            var existingSection = BODY_FIELD_TO_SECTION[existingKey];
+            if (fieldSection !== existingSection) {
+              return prev;
+            }
+          }
+          return rows[i];
+        }
+      }
+      return null;
+    };
+
+    var findSectionInsertionPoint = function(sectionLabel) {
+      var sectionOrder = BODY_SECTION_ORDER[sectionLabel] !== undefined ? BODY_SECTION_ORDER[sectionLabel] : 999;
+      var rows = tbody.children;
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (row.classList.contains('detail-section-row')) {
+          var text = row.textContent;
+          var existingOrder = BODY_SECTION_ORDER[text] !== undefined ? BODY_SECTION_ORDER[text] : 999;
+          if (existingOrder > sectionOrder) return row;
+        } else if (row.hasAttribute('data-field-key')) {
+          var key = row.getAttribute('data-field-key');
+          var fieldSection = BODY_FIELD_TO_SECTION[key];
+          var fieldSectionOrder = BODY_SECTION_ORDER[fieldSection] !== undefined ? BODY_SECTION_ORDER[fieldSection] : 999;
+          if (fieldSectionOrder > sectionOrder) return row;
+        }
+      }
+      return null;
+    };
+
+    var cleanupEmptySections = function() {
+      for (var sectionLabel in sectionRows) {
+        var sectionTr = sectionRows[sectionLabel];
+        if (!sectionTr.parentNode) {
+          delete sectionRows[sectionLabel];
+          continue;
+        }
+        var hasFields = false;
+        var sibling = sectionTr.nextElementSibling;
+        while (sibling) {
+          if (sibling.classList.contains('detail-section-row')) break;
+          if (sibling.hasAttribute('data-field-key')) {
+            hasFields = true;
+            break;
+          }
+          sibling = sibling.nextElementSibling;
+        }
+        if (!hasFields) {
+          sectionTr.parentNode.removeChild(sectionTr);
+          delete sectionRows[sectionLabel];
+        }
+      }
+    };
+
+    var addSectionRow = function(label) {
+      var tr = document.createElement('tr');
+      tr.className = 'detail-section-row';
+      var td = document.createElement('td');
+      td.colSpan = 3;
+      td.textContent = label;
+      tr.appendChild(td);
+      var ref = findSectionInsertionPoint(label);
+      if (ref) {
+        tbody.insertBefore(tr, ref);
+      } else {
+        tbody.appendChild(tr);
+      }
+      sectionRows[label] = tr;
+    };
+
+    var addFieldRow = function(key, label, inputType, value, placeholder) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-field-key', key);
+      var tdLabel = document.createElement('td');
+      tdLabel.className = 'detail-field-label';
+      tdLabel.textContent = label;
+
+      var tdValue = document.createElement('td');
+      tdValue.className = 'detail-field-value';
+
+      var input;
+      if (inputType === 'textarea') {
+        input = document.createElement('textarea');
+        input.className = 'server-input';
+        input.rows = 2;
+      } else if (inputType === 'select') {
+        input = document.createElement('select');
+        input.className = 'server-input';
+      } else {
+        input = document.createElement('input');
+        input.type = inputType;
+        input.className = 'server-input';
+      }
+      if (placeholder) input.placeholder = placeholder;
+      if (inputType !== 'select') input.value = value !== undefined && value !== null ? String(value) : '';
+
+      tdValue.appendChild(input);
+
+      var tdDelete = document.createElement('td');
+      tdDelete.className = 'detail-field-delete';
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'detail-field-delete-btn';
+      deleteBtn.textContent = '✕';
+      deleteBtn.title = 'Remove field';
+      (function(fieldKey, row) {
+        deleteBtn.addEventListener('click', function() {
+          row.parentNode.removeChild(row);
+          delete inputs[fieldKey];
+          deletedFields[fieldKey] = true;
+          cleanupEmptySections();
+          updateAddFieldBtn();
+        });
+      })(key, tr);
+      tdDelete.appendChild(deleteBtn);
+
+      tr.appendChild(tdLabel);
+      tr.appendChild(tdValue);
+      tr.appendChild(tdDelete);
+      var ref = findInsertionPoint(key);
+      if (ref) {
+        tbody.insertBefore(tr, ref);
+      } else {
+        tbody.appendChild(tr);
+      }
+      inputs[key] = input;
+      return input;
+    };
+
+    var addCheckboxRow = function(key, label, checked) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-field-key', key);
+      var tdLabel = document.createElement('td');
+      tdLabel.className = 'detail-field-label';
+      tdLabel.textContent = label;
+
+      var tdValue = document.createElement('td');
+      tdValue.className = 'detail-field-value';
+
+      var switchLabel = document.createElement('label');
+      switchLabel.className = 'switch-toggle';
+
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!checked;
+
+      var slider = document.createElement('span');
+      slider.className = 'switch-slider';
+
+      switchLabel.appendChild(cb);
+      switchLabel.appendChild(slider);
+      tdValue.appendChild(switchLabel);
+
+      var tdDelete = document.createElement('td');
+      tdDelete.className = 'detail-field-delete';
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'detail-field-delete-btn';
+      deleteBtn.textContent = '✕';
+      deleteBtn.title = 'Remove field';
+      (function(fieldKey, row) {
+        deleteBtn.addEventListener('click', function() {
+          row.parentNode.removeChild(row);
+          delete inputs[fieldKey];
+          deletedFields[fieldKey] = true;
+          cleanupEmptySections();
+          updateAddFieldBtn();
+        });
+      })(key, tr);
+      tdDelete.appendChild(deleteBtn);
+
+      tr.appendChild(tdLabel);
+      tr.appendChild(tdValue);
+      tr.appendChild(tdDelete);
+      var ref = findInsertionPoint(key);
+      if (ref) {
+        tbody.insertBefore(tr, ref);
+      } else {
+        tbody.appendChild(tr);
+      }
+      inputs[key] = cb;
+      return cb;
+    };
+
+    // Determine which fields exist
+    var hasFormat = propDef.format !== undefined;
+    var hasExample = propDef.example !== undefined;
+    var hasDefault = propDef.default !== undefined;
+    var hasEnum = propDef.enum !== undefined && propDef.enum.length > 0;
+    var hasPattern = propDef.pattern !== undefined;
+    var hasMinLen = propDef.minLength !== undefined;
+    var hasMaxLen = propDef.maxLength !== undefined;
+    var hasMin = propDef.minimum !== undefined;
+    var hasMax = propDef.maximum !== undefined;
+    var hasExclMin = propDef.exclusiveMinimum !== undefined;
+    var hasExclMax = propDef.exclusiveMaximum !== undefined;
+    var hasMinItems = propDef.minItems !== undefined;
+    var hasMaxItems = propDef.maxItems !== undefined;
+    var hasUniqueItems = propDef.uniqueItems !== undefined;
+    var hasNullable = propDef.nullable !== undefined;
+    var hasDeprecated = propDef.deprecated !== undefined;
+    var hasReadOnly = propDef.readOnly !== undefined;
+    var hasWriteOnly = propDef.writeOnly !== undefined;
+
+    var hasGeneral = hasFormat || hasExample || hasDefault;
+    var hasEnumSection = hasEnum;
+    var hasStrConstraints = hasPattern || hasMinLen || hasMaxLen;
+    var hasNumConstraints = hasMin || hasMax || hasExclMin || hasExclMax;
+    var hasArrConstraints = hasMinItems || hasMaxItems || hasUniqueItems;
+    var hasFlags = hasNullable || hasDeprecated || hasReadOnly || hasWriteOnly;
+
+    if (hasGeneral) {
+      addSectionRow('General');
+      if (hasFormat) {
+        var formatSel = addFieldRow('format', 'format', 'select', '', '');
+        var formatOptions = { string: ['', 'date', 'date-time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary', 'password'], integer: ['', 'int32', 'int64'], number: ['', 'float', 'double'] };
+        var currentType = propDef.type || 'string';
+        var opts = formatOptions[currentType] || [''];
+        if (propDef.format && opts.indexOf(propDef.format) === -1) opts = opts.concat([propDef.format]);
+        opts.forEach(function(f) {
+          var opt = document.createElement('option');
+          opt.value = f;
+          opt.textContent = f || '(none)';
+          if (f === (propDef.format || '')) opt.selected = true;
+          formatSel.appendChild(opt);
+        });
+      }
+      if (hasExample) addFieldRow('example', 'example', 'text', typeof propDef.example === 'object' ? JSON.stringify(propDef.example) : String(propDef.example), 'JSON value');
+      if (hasDefault) addFieldRow('default', 'default', 'text', typeof propDef.default === 'object' ? JSON.stringify(propDef.default) : String(propDef.default), 'JSON value');
+    }
+
+    if (hasEnumSection) {
+      addSectionRow('Enum');
+      addFieldRow('enum', 'enum', 'textarea', propDef.enum.join(', '), 'comma-separated values');
+    }
+
+    if (hasStrConstraints) {
+      addSectionRow('String Constraints');
+      if (hasPattern) addFieldRow('pattern', 'pattern', 'text', propDef.pattern, '^[a-zA-Z]+$');
+      if (hasMinLen) addFieldRow('minLength', 'minLength', 'number', propDef.minLength, '');
+      if (hasMaxLen) addFieldRow('maxLength', 'maxLength', 'number', propDef.maxLength, '');
+    }
+
+    if (hasNumConstraints) {
+      addSectionRow('Number Constraints');
+      if (hasMin) addFieldRow('minimum', 'minimum', 'number', propDef.minimum, '');
+      if (hasMax) addFieldRow('maximum', 'maximum', 'number', propDef.maximum, '');
+      if (hasExclMin) addFieldRow('exclusiveMinimum', 'exclusiveMinimum', 'number', typeof propDef.exclusiveMinimum === 'number' ? propDef.exclusiveMinimum : '', '');
+      if (hasExclMax) addFieldRow('exclusiveMaximum', 'exclusiveMaximum', 'number', typeof propDef.exclusiveMaximum === 'number' ? propDef.exclusiveMaximum : '', '');
+    }
+
+    if (hasArrConstraints) {
+      addSectionRow('Array Constraints');
+      if (hasMinItems) addFieldRow('minItems', 'minItems', 'number', propDef.minItems, '');
+      if (hasMaxItems) addFieldRow('maxItems', 'maxItems', 'number', propDef.maxItems, '');
+      if (hasUniqueItems) addCheckboxRow('uniqueItems', 'uniqueItems', propDef.uniqueItems);
+    }
+
+    if (hasFlags) {
+      addSectionRow('Flags');
+      if (hasNullable) addCheckboxRow('nullable', 'nullable', propDef.nullable);
+      if (hasDeprecated) addCheckboxRow('deprecated', 'deprecated', propDef.deprecated);
+      if (hasReadOnly) addCheckboxRow('readOnly', 'readOnly', propDef.readOnly);
+      if (hasWriteOnly) addCheckboxRow('writeOnly', 'writeOnly', propDef.writeOnly);
+    }
+
+    table.appendChild(tbody);
+
+    // --- Add Field feature ---
+    var allFields = {
+      'General': [
+        { key: 'format', label: 'format', inputType: 'select', placeholder: '' },
+        { key: 'example', label: 'example', inputType: 'text', placeholder: 'JSON value' },
+        { key: 'default', label: 'default', inputType: 'text', placeholder: 'JSON value' }
+      ],
+      'Enum': [
+        { key: 'enum', label: 'enum', inputType: 'textarea', placeholder: 'comma-separated values' }
+      ],
+      'String Constraints': [
+        { key: 'pattern', label: 'pattern', inputType: 'text', placeholder: '^[a-zA-Z]+$' },
+        { key: 'minLength', label: 'minLength', inputType: 'number', placeholder: '' },
+        { key: 'maxLength', label: 'maxLength', inputType: 'number', placeholder: '' }
+      ],
+      'Number Constraints': [
+        { key: 'minimum', label: 'minimum', inputType: 'number', placeholder: '' },
+        { key: 'maximum', label: 'maximum', inputType: 'number', placeholder: '' },
+        { key: 'exclusiveMinimum', label: 'exclusiveMinimum', inputType: 'number', placeholder: '' },
+        { key: 'exclusiveMaximum', label: 'exclusiveMaximum', inputType: 'number', placeholder: '' }
+      ],
+      'Array Constraints': [
+        { key: 'minItems', label: 'minItems', inputType: 'number', placeholder: '' },
+        { key: 'maxItems', label: 'maxItems', inputType: 'number', placeholder: '' },
+        { key: 'uniqueItems', label: 'uniqueItems', inputType: 'checkbox', placeholder: '' }
+      ],
+      'Flags': [
+        { key: 'nullable', label: 'nullable', inputType: 'checkbox', placeholder: '' },
+        { key: 'deprecated', label: 'deprecated', inputType: 'checkbox', placeholder: '' },
+        { key: 'readOnly', label: 'readOnly', inputType: 'checkbox', placeholder: '' },
+        { key: 'writeOnly', label: 'writeOnly', inputType: 'checkbox', placeholder: '' }
+      ]
+    };
+
+    var getAvailableFields = function() {
+      var available = [];
+      for (var section in allFields) {
+        var fields = allFields[section];
+        for (var i = 0; i < fields.length; i++) {
+          if (!inputs[fields[i].key]) {
+            available.push({ section: section, field: fields[i] });
+          }
+        }
+      }
+      return available;
+    };
+
+    var addFieldContainer = document.createElement('div');
+    addFieldContainer.className = 'add-field-container';
+
+    var addFieldBtn = document.createElement('button');
+    addFieldBtn.className = 'add-field-btn';
+    addFieldBtn.textContent = '+ Add Field';
+
+    var addFieldDropdown = document.createElement('div');
+    addFieldDropdown.className = 'add-field-dropdown';
+    addFieldDropdown.style.display = 'none';
+
+    var updateAddFieldBtn = function() {
+      var available = getAvailableFields();
+      if (available.length === 0) {
+        addFieldBtn.style.display = 'none';
+      } else {
+        addFieldBtn.style.display = '';
+      }
+    };
+
+    var renderDropdown = function() {
+      addFieldDropdown.innerHTML = '';
+      var available = getAvailableFields();
+      var currentSection = '';
+
+      for (var i = 0; i < available.length; i++) {
+        (function(item) {
+          if (item.section !== currentSection) {
+            currentSection = item.section;
+            var sectionHeader = document.createElement('div');
+            sectionHeader.className = 'add-field-dropdown-section';
+            sectionHeader.textContent = item.section;
+            addFieldDropdown.appendChild(sectionHeader);
+          }
+
+          var option = document.createElement('div');
+          option.className = 'add-field-dropdown-item';
+          option.textContent = item.field.label;
+          option.addEventListener('click', function() {
+            if (!sectionRows[item.section]) {
+              addSectionRow(item.section);
+            }
+
+            if (item.field.inputType === 'checkbox') {
+              addCheckboxRow(item.field.key, item.field.label, false);
+            } else if (item.field.key === 'format') {
+              var formatSel = addFieldRow('format', 'format', 'select', '', '');
+              var formatOptions = { string: ['', 'date', 'date-time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary', 'password'], integer: ['', 'int32', 'int64'], number: ['', 'float', 'double'] };
+              var currentType = propDef.type || 'string';
+              var opts = formatOptions[currentType] || [''];
+              opts.forEach(function(f) {
+                var opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f || '(none)';
+                formatSel.appendChild(opt);
+              });
+            } else {
+              addFieldRow(item.field.key, item.field.label, item.field.inputType, '', item.field.placeholder);
+            }
+
+            delete deletedFields[item.field.key];
+            addFieldDropdown.style.display = 'none';
+            updateAddFieldBtn();
+
+            if (inputs[item.field.key] && inputs[item.field.key].focus) {
+              inputs[item.field.key].focus();
+            }
+          });
+          addFieldDropdown.appendChild(option);
+        })(available[i]);
+      }
+    };
+
+    addFieldBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (addFieldDropdown.style.display === 'none') {
+        renderDropdown();
+        addFieldDropdown.style.top = '';
+        addFieldDropdown.style.bottom = '';
+        addFieldDropdown.style.marginTop = '';
+        addFieldDropdown.style.marginBottom = '';
+        addFieldDropdown.style.display = 'block';
+
+        var btnRect = addFieldBtn.getBoundingClientRect();
+        var dialogRect = dialog.getBoundingClientRect();
+        var dropdownHeight = addFieldDropdown.offsetHeight;
+        var spaceBelow = dialogRect.bottom - btnRect.bottom - 16;
+        var spaceAbove = btnRect.top - dialogRect.top - 16;
+
+        if (spaceBelow >= dropdownHeight) {
+          addFieldDropdown.style.top = '100%';
+          addFieldDropdown.style.bottom = 'auto';
+          addFieldDropdown.style.marginTop = '4px';
+          addFieldDropdown.style.marginBottom = '0';
+        } else if (spaceAbove >= dropdownHeight) {
+          addFieldDropdown.style.top = 'auto';
+          addFieldDropdown.style.bottom = '100%';
+          addFieldDropdown.style.marginTop = '0';
+          addFieldDropdown.style.marginBottom = '4px';
+        } else {
+          if (spaceBelow >= spaceAbove) {
+            addFieldDropdown.style.top = '100%';
+            addFieldDropdown.style.bottom = 'auto';
+            addFieldDropdown.style.marginTop = '4px';
+            addFieldDropdown.style.marginBottom = '0';
+            addFieldDropdown.style.maxHeight = spaceBelow + 'px';
+          } else {
+            addFieldDropdown.style.top = 'auto';
+            addFieldDropdown.style.bottom = '100%';
+            addFieldDropdown.style.marginTop = '0';
+            addFieldDropdown.style.marginBottom = '4px';
+            addFieldDropdown.style.maxHeight = spaceAbove + 'px';
+          }
+        }
+      } else {
+        addFieldDropdown.style.display = 'none';
+      }
+    });
+
+    dialog.addEventListener('click', function(e) {
+      if (!addFieldContainer.contains(e.target)) {
+        addFieldDropdown.style.display = 'none';
+      }
+    });
+
+    addFieldContainer.appendChild(addFieldBtn);
+    addFieldContainer.appendChild(addFieldDropdown);
+
+    // --- Buttons ---
+    var buttons = document.createElement('div');
+    buttons.className = 'server-dialog-buttons';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'server-dialog-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { overlay.remove(); });
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'server-dialog-save';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', function() {
+      var result = {};
+
+      // Always include type from propDef
+      result.type = propDef.type || 'string';
+
+      if (inputs.format) {
+        var fv = inputs.format.value.trim();
+        if (fv) result.format = fv;
+      }
+      if (inputs.example) {
+        var ev = inputs.example.value.trim();
+        if (ev) { try { result.example = JSON.parse(ev); } catch(e) { result.example = ev; } }
+      }
+      if (inputs.default) {
+        var dv = inputs.default.value.trim();
+        if (dv) { try { result.default = JSON.parse(dv); } catch(e) { result.default = dv; } }
+      }
+      if (inputs.enum) {
+        var enumVal = inputs.enum.value.trim();
+        if (enumVal) { result.enum = enumVal.split(',').map(function(v) { return v.trim(); }).filter(function(v) { return v; }); }
+      }
+      if (inputs.pattern) { var pv = inputs.pattern.value.trim(); if (pv) result.pattern = pv; }
+
+      var numFields = ['minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems'];
+      numFields.forEach(function(f) {
+        if (inputs[f]) {
+          var v = inputs[f].value.trim();
+          if (v !== '') result[f] = Number(v);
+        }
+      });
+
+      var boolFields = ['uniqueItems', 'nullable', 'deprecated', 'readOnly', 'writeOnly'];
+      boolFields.forEach(function(f) {
+        if (inputs[f] && inputs[f].checked) { result[f] = true; }
+      });
+
+      // Preserve description if it exists
+      if (propDef.description) result.description = propDef.description;
+
+      onSave(result);
+      overlay.remove();
+    });
+
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(saveBtn);
+
+    dialog.appendChild(title);
+    dialog.appendChild(table);
+    dialog.appendChild(addFieldContainer);
+    updateAddFieldBtn();
+    dialog.appendChild(buttons);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') overlay.remove();
+    });
   };
 
   // Raw text body editor
