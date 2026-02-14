@@ -1578,6 +1578,53 @@ export class OpenApiService {
     }
   }
 
+  async updateFullSchema(
+    filePath: string,
+    schemaName: string,
+    schema: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas) {
+        return { success: false, message: 'No schemas section found' };
+      }
+
+      if (!schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      // Preserve non-property fields from the existing schema (like 'type', 'title', 'description' at schema level)
+      const existingSchema = schemas[schemaName] as Record<string, unknown>;
+      const updatedSchema: Record<string, unknown> = {
+        ...existingSchema,
+        type: schema.type || existingSchema.type || 'object',
+        properties: schema.properties || {},
+      };
+
+      // Update required array
+      if (schema.required && Array.isArray(schema.required) && (schema.required as unknown[]).length > 0) {
+        updatedSchema.required = schema.required;
+      } else {
+        delete updatedSchema.required;
+      }
+
+      schemas[schemaName] = updatedSchema;
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating full schema: ${message}`);
+      return { success: false, message };
+    }
+  }
+
   clearCache(): void {
     this.cache.clear();
   }

@@ -856,6 +856,21 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  // Handle update full schema
+  panel.onUpdateFullSchema(async (data) => {
+    const result = await openApiService.updateFullSchema(data.filePath, data.schemaName, data.schema);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
   // Reset flag when panel is disposed
   panel.onDispose(() => {
     panelHandlersRegistered = false;

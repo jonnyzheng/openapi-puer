@@ -3010,3 +3010,334 @@ td.no-params-message {
 .tree-row[data-depth="4"] .tree-name-input { width: 50px; }
 .tree-row[data-depth="5"] .tree-name-input { width: 40px; }
 .tree-row[data-depth="6"] .tree-name-input { width: 40px; }
+
+/* ========================================
+   SchemaTable Component Styles
+   ======================================== */
+
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.schema-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
+}
+
+.schema-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  vertical-align: middle;
+}
+
+.schema-table th:last-child,
+.schema-table td:last-child {
+  width: 40px;
+  text-align: center;
+}
+
+/* Schema row */
+.schema-row {
+  transition: background-color 0.15s ease;
+}
+
+.schema-row:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.schema-row.schema-hidden {
+  display: none;
+}
+
+/* Name cell container */
+.schema-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Indentation spacer */
+.schema-indent {
+  display: inline-block;
+  flex-shrink: 0;
+  height: 1px;
+}
+
+/* Depth-based indentation */
+.schema-row[data-depth="1"] .schema-indent { width: 20px; }
+.schema-row[data-depth="2"] .schema-indent { width: 40px; }
+.schema-row[data-depth="3"] .schema-indent { width: 60px; }
+.schema-row[data-depth="4"] .schema-indent { width: 80px; }
+.schema-row[data-depth="5"] .schema-indent { width: 100px; }
+.schema-row[data-depth="6"] .schema-indent { width: 120px; }
+
+/* Chevron for expand/collapse */
+.schema-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  font-size: 10px;
+  user-select: none;
+}
+
+.schema-chevron:hover {
+  color: var(--vscode-foreground);
+}
+
+.schema-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.schema-chevron.placeholder {
+  visibility: hidden;
+}
+
+/* Name input */
+.schema-name-input {
+  min-width: 40px;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: 12px;
+}
+
+.schema-name-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Set name input width based on depth - shorter for nested rows */
+.schema-row[data-depth="0"] .schema-name-input { width: 120px; }
+.schema-row[data-depth="1"] .schema-name-input { width: 100px; }
+.schema-row[data-depth="2"] .schema-name-input { width: 80px; }
+.schema-row[data-depth="3"] .schema-name-input { width: 60px; }
+.schema-row[data-depth="4"] .schema-name-input { width: 50px; }
+.schema-row[data-depth="5"] .schema-name-input { width: 40px; }
+.schema-row[data-depth="6"] .schema-name-input { width: 40px; }
+
+/* Add child button */
+.schema-add-child-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: 4px;
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.schema-row:hover .schema-add-child-btn,
+.schema-add-child-btn:focus {
+  opacity: 1;
+}
+
+.schema-add-child-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+  color: var(--vscode-foreground);
+}
+
+/* Type select */
+.schema-type-select {
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  font-size: 12px;
+  min-width: 80px;
+}
+
+.schema-type-select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Description input */
+.schema-desc-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.schema-desc-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Others cell */
+.schema-others-cell {
+  position: relative;
+  max-width: 150px;
+}
+
+.schema-others-placeholder {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+}
+
+.schema-others-summary {
+  color: var(--vscode-textLink-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 140px;
+}
+
+/* Others tooltip */
+.schema-others-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: 4px;
+  padding: 8px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-width: 180px;
+  max-width: 300px;
+  margin-bottom: 4px;
+}
+
+.schema-others-tooltip-table {
+  width: 100%;
+  font-size: 11px;
+}
+
+.schema-others-tooltip-key {
+  color: var(--vscode-descriptionForeground);
+  padding-right: 8px;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.schema-others-tooltip-value {
+  color: var(--vscode-foreground);
+  word-break: break-word;
+}
+
+/* Required checkbox */
+.schema-required-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Delete button */
+.schema-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.schema-row:hover .schema-delete-btn {
+  opacity: 1;
+}
+
+.schema-delete-btn:hover {
+  background-color: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-errorForeground);
+}
+
+/* Add field row */
+.schema-add-row {
+  margin-top: 8px;
+}
+
+.schema-add-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px dashed var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.schema-add-btn:hover {
+  border-color: var(--vscode-focusBorder);
+  color: var(--vscode-foreground);
+}
+
+/* Tree connector lines for nested items */
+.schema-row[data-depth]:not([data-depth="0"]) td:first-child {
+  position: relative;
+}
+
+.schema-row[data-depth]:not([data-depth="0"]) td:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--vscode-panel-border);
+  opacity: 0.5;
+}
+
+/* Position connector lines based on depth */
+.schema-row[data-depth="1"] td:first-child::before { left: 8px; }
+.schema-row[data-depth="2"] td:first-child::before { left: 28px; }
+.schema-row[data-depth="3"] td:first-child::before { left: 48px; }
+.schema-row[data-depth="4"] td:first-child::before { left: 68px; }
+.schema-row[data-depth="5"] td:first-child::before { left: 88px; }
+.schema-row[data-depth="6"] td:first-child::before { left: 108px; }
+
+/* Horizontal connector line */
+.schema-row[data-depth]:not([data-depth="0"]) td:first-child::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  width: 8px;
+  background-color: var(--vscode-panel-border);
+  opacity: 0.5;
+}
+
+.schema-row[data-depth="1"] td:first-child::after { left: 8px; }
+.schema-row[data-depth="2"] td:first-child::after { left: 28px; }
+.schema-row[data-depth="3"] td:first-child::after { left: 48px; }
+.schema-row[data-depth="4"] td:first-child::after { left: 68px; }
+.schema-row[data-depth="5"] td:first-child::after { left: 88px; }
+.schema-row[data-depth="6"] td:first-child::after { left: 108px; }

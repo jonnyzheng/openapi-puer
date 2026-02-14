@@ -170,6 +170,13 @@ export class ApiPanel {
   }>();
   readonly onUpdateSchemaProperty = this.onUpdateSchemaPropertyEmitter.event;
 
+  private onUpdateFullSchemaEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    schema: Record<string, unknown>;
+  }>();
+  readonly onUpdateFullSchema = this.onUpdateFullSchemaEmitter.event;
+
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -485,6 +492,13 @@ export class ApiPanel {
           };
         });
         break;
+      case 'updateFullSchema':
+        this.onUpdateFullSchemaEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          schema: Record<string, unknown>;
+        });
+        break;
       case 'ready':
         this._webviewReady = true;
         this._flushMessageQueue();
@@ -554,6 +568,9 @@ export class ApiPanel {
     );
     const utilsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'utils.js')
+    );
+    const schemaTableUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'schemaTable.js')
     );
     const detailsTabUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'detailsTab.js')
@@ -768,6 +785,7 @@ export class ApiPanel {
   <script nonce="${nonce}" src="${prismJsUri}"></script>
   <script nonce="${nonce}" src="${prismJsonUri}"></script>
   <script nonce="${nonce}" src="${utilsUri}"></script>
+  <script nonce="${nonce}" src="${schemaTableUri}"></script>
   <script nonce="${nonce}" src="${detailsTabUri}"></script>
   <script nonce="${nonce}" src="${requestTabUri}"></script>
   <script nonce="${nonce}" src="${componentsTabUri}"></script>

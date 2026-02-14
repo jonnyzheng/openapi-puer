@@ -620,7 +620,7 @@
     return result;
   };
 
-  S.showPropertyDetailDialog = function(schemaName, propName, propDef) {
+  S.showPropertyDetailDialog = function(schemaName, propName, propDef, onSave) {
     var existingDialog = document.querySelector('.server-dialog-overlay');
     if (existingDialog) existingDialog.remove();
 
@@ -1183,10 +1183,25 @@
         }
       }
 
-      S.vscode.postMessage({
-        type: 'updateSchemaProperty',
-        payload: { filePath: S.currentFilePath, schemaName: schemaName, propertyName: propName, updates: updates }
-      });
+      // If onSave callback provided, use it (for SchemaTable integration)
+      if (typeof onSave === 'function') {
+        // Build updated propDef by merging updates into existing propDef
+        var updatedPropDef = Object.assign({}, propDef);
+        for (var key in updates) {
+          if (updates[key] === null) {
+            delete updatedPropDef[key];
+          } else {
+            updatedPropDef[key] = updates[key];
+          }
+        }
+        onSave(updatedPropDef);
+      } else {
+        // Legacy behavior: send postMessage
+        S.vscode.postMessage({
+          type: 'updateSchemaProperty',
+          payload: { filePath: S.currentFilePath, schemaName: schemaName, propertyName: propName, updates: updates }
+        });
+      }
       overlay.remove();
     });
 
@@ -1330,260 +1345,26 @@
         });
       })(propsTabBtn, sourceTabBtn, propsContent, sourceContent, name, sourceCode);
 
-      // Properties table
-      if (schema.properties && Object.keys(schema.properties).length > 0) {
-        var table = document.createElement('table');
-        table.className = 'component-props-table';
-
-        var thead = document.createElement('thead');
-        thead.innerHTML = '<tr><th>Property</th><th>Type</th><th>Description</th><th>Others</th><th>Required</th><th></th></tr>';
-        table.appendChild(thead);
-
-        var tbody = document.createElement('tbody');
-        for (var propName in schema.properties) {
-          (function(pName) {
-            var propSchema = schema.properties[pName];
-            var row = document.createElement('tr');
-
-            // Name cell - editable
-            var nameCell = document.createElement('td');
-            var nameCode = document.createElement('code');
-            nameCode.className = 'editable-cell';
-            nameCode.textContent = pName;
-            nameCode.title = 'Click to rename';
-            nameCode.addEventListener('click', function() {
-              var input = document.createElement('input');
-              input.type = 'text';
-              input.className = 'inline-edit-input';
-              input.value = pName;
-              nameCode.textContent = '';
-              nameCode.appendChild(input);
-              input.focus();
-              input.select();
-
-              var finish = function() {
-                var newName = input.value.trim();
-                if (newName && newName !== pName) {
-                  S.vscode.postMessage({
-                    type: 'updateSchemaProperty',
-                    payload: { filePath: S.currentFilePath, schemaName: name, propertyName: pName, updates: { name: newName } }
-                  });
-                } else {
-                  nameCode.textContent = pName;
-                }
-              };
-              input.addEventListener('blur', finish);
-              input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { input.blur(); }
-                else if (e.key === 'Escape') { nameCode.textContent = pName; }
-              });
+      // Properties table - use reusable SchemaTable component
+      (function(schemaName, schemaData, propsContainer) {
+        var schemaTableInstance = window.SchemaTable.create({
+          container: propsContainer,
+          schema: schemaData,
+          onSchemaChange: function(newSchema) {
+            // Send full schema update to backend
+            S.vscode.postMessage({
+              type: 'updateFullSchema',
+              payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: newSchema }
             });
-            nameCell.appendChild(nameCode);
+          },
+          onShowOthersDialog: function(propName, propDef, onSave) {
+            S.showPropertyDetailDialog(schemaName, propName, propDef, onSave);
+          }
+        });
 
-            // Type cell - editable via select
-            var typeCell = document.createElement('td');
-            var typeSpanCell = document.createElement('span');
-            typeSpanCell.className = 'editable-cell';
-            typeSpanCell.textContent = propSchema.type || 'any';
-            typeSpanCell.title = 'Click to change type';
-            typeSpanCell.addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-
-              // Prevent multiple selects
-              if (typeSpanCell.querySelector('select')) return;
-
-              var select = document.createElement('select');
-              select.className = 'inline-edit-input';
-              ['string', 'integer', 'number', 'boolean', 'object', 'array'].forEach(function(t) {
-                var opt = document.createElement('option');
-                opt.value = t;
-                opt.textContent = t;
-                if (t === (propSchema.type || 'string')) opt.selected = true;
-                select.appendChild(opt);
-              });
-              typeSpanCell.textContent = '';
-              typeSpanCell.appendChild(select);
-
-              // Use setTimeout to ensure focus happens after current event cycle
-              setTimeout(function() {
-                select.focus();
-                select.click();
-              }, 0);
-
-              var finished = false;
-              var finish = function() {
-                if (finished) return;
-                finished = true;
-                var newType = select.value;
-                if (newType !== propSchema.type) {
-                  S.vscode.postMessage({
-                    type: 'updateSchemaProperty',
-                    payload: { filePath: S.currentFilePath, schemaName: name, propertyName: pName, updates: { type: newType } }
-                  });
-                } else {
-                  typeSpanCell.textContent = propSchema.type || 'any';
-                }
-              };
-
-              select.addEventListener('blur', finish);
-              select.addEventListener('change', finish);
-            });
-            typeCell.appendChild(typeSpanCell);
-
-            // Description cell - editable
-            var descCell = document.createElement('td');
-            var descSpan = document.createElement('span');
-            descSpan.className = 'editable-cell';
-            descSpan.textContent = propSchema.description || '—';
-            if (!propSchema.description) descSpan.classList.add('empty');
-            descSpan.title = 'Click to edit description';
-            descSpan.addEventListener('click', function() {
-              var input = document.createElement('input');
-              input.type = 'text';
-              input.className = 'inline-edit-input';
-              input.value = propSchema.description || '';
-              input.placeholder = 'Description...';
-              descSpan.textContent = '';
-              descSpan.appendChild(input);
-              input.focus();
-
-              var finish = function() {
-                var newDesc = input.value.trim();
-                if (newDesc !== (propSchema.description || '')) {
-                  S.vscode.postMessage({
-                    type: 'updateSchemaProperty',
-                    payload: { filePath: S.currentFilePath, schemaName: name, propertyName: pName, updates: { description: newDesc } }
-                  });
-                } else {
-                  descSpan.textContent = propSchema.description || '—';
-                  if (!propSchema.description) descSpan.classList.add('empty');
-                }
-              };
-              input.addEventListener('blur', finish);
-              input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') input.blur();
-                else if (e.key === 'Escape') {
-                  descSpan.textContent = propSchema.description || '—';
-                  if (!propSchema.description) descSpan.classList.add('empty');
-                }
-              });
-            });
-            descCell.appendChild(descSpan);
-
-            // Others cell - clickable summary of extra fields with tooltip
-            var othersCell = document.createElement('td');
-            othersCell.className = 'others-cell';
-            var othersSummary = S.getOthersSummary(propSchema);
-            var othersSpan = document.createElement('span');
-            if (othersSummary === '—') {
-              othersSpan.className = 'others-placeholder';
-              othersSpan.textContent = '—';
-            } else {
-              othersSpan.className = 'others-summary';
-              othersSpan.textContent = othersSummary;
-            }
-            othersCell.appendChild(othersSpan);
-
-            // Tooltip on hover
-            (function(cell, pSchema) {
-              var tooltip = null;
-              cell.addEventListener('mouseenter', function() {
-                var details = S.getOthersDetails(pSchema);
-                if (details.length === 0) return;
-
-                tooltip = document.createElement('div');
-                tooltip.className = 'others-tooltip';
-
-                var table = document.createElement('table');
-                table.className = 'others-tooltip-table';
-                for (var i = 0; i < details.length; i++) {
-                  var tr = document.createElement('tr');
-                  var tdKey = document.createElement('td');
-                  tdKey.className = 'others-tooltip-key';
-                  tdKey.textContent = details[i].key;
-                  var tdVal = document.createElement('td');
-                  tdVal.className = 'others-tooltip-value';
-                  tdVal.textContent = details[i].value;
-                  tr.appendChild(tdKey);
-                  tr.appendChild(tdVal);
-                  table.appendChild(tr);
-                }
-                tooltip.appendChild(table);
-                cell.appendChild(tooltip);
-
-                // Position: ensure tooltip stays within viewport
-                var cellRect = cell.getBoundingClientRect();
-                var tipRect = tooltip.getBoundingClientRect();
-                if (tipRect.right > window.innerWidth) {
-                  tooltip.style.left = 'auto';
-                  tooltip.style.right = '0';
-                }
-                if (tipRect.bottom > window.innerHeight) {
-                  tooltip.style.top = 'auto';
-                  tooltip.style.bottom = '100%';
-                  tooltip.style.marginBottom = '4px';
-                  tooltip.style.marginTop = '0';
-                }
-              });
-              cell.addEventListener('mouseleave', function() {
-                if (tooltip && tooltip.parentNode) {
-                  tooltip.parentNode.removeChild(tooltip);
-                  tooltip = null;
-                }
-              });
-            })(othersCell, propSchema);
-
-            othersCell.addEventListener('click', function() {
-              S.showPropertyDetailDialog(name, pName, propSchema);
-            });
-
-            // Required cell - checkbox
-            var reqCell = document.createElement('td');
-            var reqCheckbox = document.createElement('input');
-            reqCheckbox.type = 'checkbox';
-            reqCheckbox.checked = !!(schema.required && schema.required.includes(pName));
-            reqCheckbox.addEventListener('change', function() {
-              S.vscode.postMessage({
-                type: 'updateSchemaProperty',
-                payload: { filePath: S.currentFilePath, schemaName: name, propertyName: pName, updates: { required: reqCheckbox.checked } }
-              });
-            });
-            reqCell.appendChild(reqCheckbox);
-
-            // Delete cell
-            var deleteCell = document.createElement('td');
-            var deleteBtn = document.createElement('button');
-            deleteBtn.className = 'schema-action-btn delete small';
-            deleteBtn.textContent = '✕';
-            deleteBtn.title = 'Delete property';
-            deleteBtn.addEventListener('click', function() {
-              if (confirm('Delete property "' + pName + '"?')) {
-                S.vscode.postMessage({
-                  type: 'deleteSchemaProperty',
-                  payload: { filePath: S.currentFilePath, schemaName: name, propertyName: pName }
-                });
-              }
-            });
-            deleteCell.appendChild(deleteBtn);
-
-            row.appendChild(nameCell);
-            row.appendChild(typeCell);
-            row.appendChild(descCell);
-            row.appendChild(othersCell);
-            row.appendChild(reqCell);
-            row.appendChild(deleteCell);
-            tbody.appendChild(row);
-          })(propName);
-        }
-        table.appendChild(tbody);
-        propsContent.appendChild(table);
-      } else {
-        var emptyProps = document.createElement('div');
-        emptyProps.className = 'empty-message';
-        emptyProps.textContent = 'No properties. Click "+ Property" to add one.';
-        propsContent.appendChild(emptyProps);
-      }
+        // Store reference for potential cleanup
+        propsContainer._schemaTable = schemaTableInstance;
+      })(name, schema, propsContent);
 
       card.appendChild(propsContent);
       card.appendChild(sourceContent);
