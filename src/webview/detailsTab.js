@@ -774,10 +774,19 @@
     var schema = existingMedia && existingMedia.schema ? existingMedia.schema : {};
     var contentType = 'application/json';
 
+    // Get the header save button reference first
+    var headerSaveBtn = document.getElementById('body-tab-save-btn');
+    var newBtn = null;
+
     // Use the reusable SchemaTable component
     var schemaTable = window.SchemaTable.create({
       container: container,
       schema: schema,
+      onDirtyChange: function(isDirty) {
+        if (newBtn) {
+          newBtn.style.display = isDirty ? '' : 'none';
+        }
+      },
       onShowOthersDialog: function(propName, propDef, onSave) {
         S._showBodyPropertyDetailDialog(propName, propDef, onSave);
       }
@@ -787,16 +796,17 @@
     container._schemaTable = schemaTable;
 
     // Set up header save button for JSON type
-    var headerSaveBtn = document.getElementById('body-tab-save-btn');
     if (headerSaveBtn) {
-      var newBtn = headerSaveBtn.cloneNode(true);
+      newBtn = headerSaveBtn.cloneNode(true);
       newBtn.id = 'body-tab-save-btn';
+      newBtn.style.display = 'none'; // Hidden until changes are made
       headerSaveBtn.parentNode.replaceChild(newBtn, headerSaveBtn);
       newBtn.addEventListener('click', function() {
         var schemaObj = schemaTable.getSchema();
         var content = {};
         content[contentType] = { schema: schemaObj };
         S._saveRequestBody({ content: content });
+        schemaTable.setClean();
       });
     }
   };

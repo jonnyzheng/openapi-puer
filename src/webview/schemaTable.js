@@ -8,14 +8,16 @@
    * @param {HTMLElement} options.container - Container element to render into
    * @param {Object} options.schema - Schema object with properties and required
    * @param {Function} options.onSchemaChange - Callback when schema changes (receives full schema)
+   * @param {Function} options.onDirtyChange - Callback when dirty state changes (receives boolean isDirty)
    * @param {Function} options.onShowOthersDialog - Callback to show Others detail dialog (path, propDef, onSave)
    * @param {boolean} options.readOnly - If true, table is read-only
-   * @returns {Object} - { getSchema, refresh, destroy }
+   * @returns {Object} - { getSchema, refresh, destroy, isDirty, setClean }
    */
   function createSchemaTable(options) {
     var container = options.container;
     var schema = options.schema || {};
     var onSchemaChange = options.onSchemaChange;
+    var onDirtyChange = options.onDirtyChange;
     var onShowOthersDialog = options.onShowOthersDialog;
     var readOnly = options.readOnly || false;
 
@@ -23,6 +25,7 @@
     var propertyDefs = {};
     var tbody = null;
     var table = null;
+    var isDirty = false;
 
     // Helper: Check if type can have children
     function canHaveChildren(type) {
@@ -63,9 +66,13 @@
         // Collapse: hide all descendants
         row.setAttribute('data-expanded', 'false');
         if (chevron) chevron.classList.remove('expanded');
-        var children = tbody.querySelectorAll('tr[data-parent^="' + path + '"]');
-        children.forEach(function(child) {
-          child.classList.add('schema-hidden');
+        // Hide all descendants (direct children and their children)
+        var rows = tbody.querySelectorAll('tr');
+        rows.forEach(function(child) {
+          var childParent = child.getAttribute('data-parent');
+          if (childParent === path || (childParent && childParent.indexOf(path + '.') === 0)) {
+            child.classList.add('schema-hidden');
+          }
         });
       } else {
         // Expand: show direct children only
@@ -78,13 +85,65 @@
       }
     }
 
+    // Show custom confirmation dialog
+    function showConfirmDialog(message, onConfirm) {
+      var overlay = document.createElement('div');
+      overlay.className = 'server-dialog-overlay';
+
+      var dialog = document.createElement('div');
+      dialog.className = 'server-dialog';
+      dialog.style.minWidth = '400px';
+      dialog.style.maxWidth = '500px';
+
+      var title = document.createElement('h3');
+      title.textContent = 'Confirm Delete';
+      dialog.appendChild(title);
+
+      var messageEl = document.createElement('p');
+      messageEl.className = 'server-delete-message';
+      messageEl.innerHTML = message;
+      dialog.appendChild(messageEl);
+
+      var buttons = document.createElement('div');
+      buttons.className = 'server-dialog-buttons';
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'server-dialog-cancel';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', function() {
+        overlay.remove();
+      });
+      buttons.appendChild(cancelBtn);
+
+      var confirmBtn = document.createElement('button');
+      confirmBtn.className = 'server-dialog-delete';
+      confirmBtn.textContent = 'Delete';
+      confirmBtn.addEventListener('click', function() {
+        overlay.remove();
+        onConfirm();
+      });
+      buttons.appendChild(confirmBtn);
+
+      dialog.appendChild(buttons);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      // Focus cancel button for safety
+      cancelBtn.focus();
+    }
+
     // Remove all children of a row
     function removeChildren(path) {
-      var children = tbody.querySelectorAll('tr[data-parent^="' + path + '"]');
-      children.forEach(function(child) {
-        var childPath = child.getAttribute('data-path');
-        delete propertyDefs[childPath];
-        child.remove();
+      // Find direct children and descendants
+      // Match data-parent that equals path exactly OR starts with path + "."
+      var rows = tbody.querySelectorAll('tr');
+      rows.forEach(function(child) {
+        var childParent = child.getAttribute('data-parent');
+        if (childParent === path || (childParent && childParent.indexOf(path + '.') === 0)) {
+          var childPath = child.getAttribute('data-path');
+          delete propertyDefs[childPath];
+          child.remove();
+        }
       });
     }
 
@@ -419,10 +478,18 @@
         delBtn.title = 'Delete field';
         delBtn.addEventListener('click', function() {
           var currentPath = tr.getAttribute('data-path');
-          removeChildren(currentPath);
-          delete propertyDefs[currentPath];
-          tr.remove();
-          notifyChange();
+          var fieldName = nameInput.value.trim() || 'this field';
+          var childCount = tbody.querySelectorAll('tr[data-parent="' + currentPath + '"]').length;
+          var message = 'Are you sure you want to delete <code>' + fieldName + '</code>?';
+          if (childCount > 0) {
+            message += '<br><br>This will also delete ' + childCount + ' nested field' + (childCount > 1 ? 's' : '') + '.';
+          }
+          showConfirmDialog(message, function() {
+            removeChildren(currentPath);
+            delete propertyDefs[currentPath];
+            tr.remove();
+            notifyChange();
+          });
         });
         tdDel.appendChild(delBtn);
         tr.appendChild(tdDel);
@@ -513,8 +580,29 @@
       return rootSchema;
     }
 
+    // Mark as dirty and notify
+    function markDirty() {
+      if (!isDirty) {
+        isDirty = true;
+        if (onDirtyChange) {
+          onDirtyChange(true);
+        }
+      }
+    }
+
+    // Mark as clean
+    function markClean() {
+      if (isDirty) {
+        isDirty = false;
+        if (onDirtyChange) {
+          onDirtyChange(false);
+        }
+      }
+    }
+
     // Notify schema change
     function notifyChange() {
+      markDirty();
       if (onSchemaChange) {
         onSchemaChange(collectSchemaFromRows());
       }
@@ -580,6 +668,7 @@
       },
       refresh: function(newSchema) {
         schema = newSchema || {};
+        isDirty = false;
         render();
       },
       destroy: function() {
@@ -587,6 +676,12 @@
         propertyDefs = {};
         tbody = null;
         table = null;
+      },
+      isDirty: function() {
+        return isDirty;
+      },
+      setClean: function() {
+        markClean();
       }
     };
   }

@@ -2,6 +2,56 @@
 (function() {
   const S = window.OpenAPIPuer;
 
+  // Custom confirmation dialog (replaces native confirm())
+  function showConfirmDialog(message, onConfirm) {
+    var existingDialog = document.querySelector('.server-dialog-overlay');
+    if (existingDialog) existingDialog.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'server-dialog-overlay';
+
+    var dialog = document.createElement('div');
+    dialog.className = 'server-dialog';
+    dialog.style.minWidth = '400px';
+    dialog.style.maxWidth = '500px';
+
+    var title = document.createElement('h3');
+    title.textContent = 'Confirm Delete';
+    dialog.appendChild(title);
+
+    var messageEl = document.createElement('p');
+    messageEl.className = 'server-delete-message';
+    messageEl.innerHTML = message;
+    dialog.appendChild(messageEl);
+
+    var buttons = document.createElement('div');
+    buttons.className = 'server-dialog-buttons';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'server-dialog-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() {
+      overlay.remove();
+    });
+    buttons.appendChild(cancelBtn);
+
+    var confirmBtn = document.createElement('button');
+    confirmBtn.className = 'server-dialog-delete';
+    confirmBtn.textContent = 'Delete';
+    confirmBtn.addEventListener('click', function() {
+      overlay.remove();
+      onConfirm();
+    });
+    buttons.appendChild(confirmBtn);
+
+    dialog.appendChild(buttons);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Focus cancel button for safety
+    cancelBtn.focus();
+  }
+
   S.renderComponents = function() {
     const escapeHtml = S.escapeHtml;
     const capitalizeFirst = S.capitalizeFirst;
@@ -1272,12 +1322,12 @@
       deleteSchemaBtn.textContent = 'Delete';
       deleteSchemaBtn.title = 'Delete schema';
       deleteSchemaBtn.addEventListener('click', function() {
-        if (confirm('Delete schema "' + name + '"?')) {
+        showConfirmDialog('Are you sure you want to delete schema <code>' + name + '</code>?', function() {
           S.vscode.postMessage({
             type: 'deleteSchema',
             payload: { filePath: S.currentFilePath, schemaName: name }
           });
-        }
+        });
       });
 
       headerActions.appendChild(addPropBtn);
@@ -1347,15 +1397,19 @@
 
       // Properties table - use reusable SchemaTable component
       (function(schemaName, schemaData, propsContainer) {
+        // Add Save button (hidden initially)
+        var saveRow = document.createElement('div');
+        saveRow.className = 'schema-save-row';
+        saveRow.style.display = 'none';
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'schema-save-btn';
+        saveBtn.textContent = 'Save Schema';
+
         var schemaTableInstance = window.SchemaTable.create({
           container: propsContainer,
           schema: schemaData,
-          onSchemaChange: function(newSchema) {
-            // Send full schema update to backend
-            S.vscode.postMessage({
-              type: 'updateFullSchema',
-              payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: newSchema }
-            });
+          onDirtyChange: function(isDirty) {
+            saveRow.style.display = isDirty ? '' : 'none';
           },
           onShowOthersDialog: function(propName, propDef, onSave) {
             S.showPropertyDetailDialog(schemaName, propName, propDef, onSave);
@@ -1364,6 +1418,17 @@
 
         // Store reference for potential cleanup
         propsContainer._schemaTable = schemaTableInstance;
+
+        saveBtn.addEventListener('click', function() {
+          var newSchema = schemaTableInstance.getSchema();
+          S.vscode.postMessage({
+            type: 'updateFullSchema',
+            payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: newSchema }
+          });
+          schemaTableInstance.setClean();
+        });
+        saveRow.appendChild(saveBtn);
+        propsContainer.appendChild(saveRow);
       })(name, schema, propsContent);
 
       card.appendChild(propsContent);

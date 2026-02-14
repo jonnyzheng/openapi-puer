@@ -1732,6 +1732,9 @@ pre[class*="language-"] {
 
 .schema-card-tab-content.active {
   display: block;
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: auto;
 }
 
 /* Schema source view */
@@ -3341,3 +3344,69 @@ td.no-params-message {
 .schema-row[data-depth="4"] td:first-child::after { left: 68px; }
 .schema-row[data-depth="5"] td:first-child::after { left: 88px; }
 .schema-row[data-depth="6"] td:first-child::after { left: 108px; }
+
+/* Schema save button row */
+.schema-save-row {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.schema-save-btn {
+  padding: 6px 16px;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+
+.schema-save-btn:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.schema-save-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+/* Schemas editable content container with scrollbar */
+#schemas-editable-content {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+/* Custom scrollbar styling for schemas content */
+#schemas-editable-content::-webkit-scrollbar,
+.schema-card-tab-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#schemas-editable-content::-webkit-scrollbar-track,
+.schema-card-tab-content::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 4px;
+}
+
+#schemas-editable-content::-webkit-scrollbar-thumb,
+.schema-card-tab-content::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+  border-radius: 4px;
+}
+
+#schemas-editable-content::-webkit-scrollbar-thumb:hover,
+.schema-card-tab-content::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Scrollbar corner */
+#schemas-editable-content::-webkit-scrollbar-corner,
+.schema-card-tab-content::-webkit-scrollbar-corner {
+  background: transparent;
+}
