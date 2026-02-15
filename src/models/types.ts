@@ -89,6 +89,15 @@ export interface SchemaObject {
   maxItems?: number;
   uniqueItems?: boolean;
   $ref?: string;
+  // Schema composition
+  allOf?: SchemaObject[];
+  oneOf?: SchemaObject[];
+  anyOf?: SchemaObject[];
+  discriminator?: {
+    propertyName: string;
+    mapping?: Record<string, string>;
+  };
+  _mergedFrom?: string[];  // Track allOf merge sources for UI display
 }
 
 export interface ApiResponse {

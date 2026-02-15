@@ -74,7 +74,15 @@ export class OpenApiService {
 
       // Use bundle() instead of validate() to keep $ref references intact
       // This allows us to show component names in the UI
-      const spec = await SwaggerParser.bundle(filePath) as OpenAPI.Document;
+      // If bundle fails (e.g., due to unresolved external refs), fall back to using the parsed content directly
+      let spec: OpenAPI.Document;
+      try {
+        spec = await SwaggerParser.bundle(filePath) as OpenAPI.Document;
+      } catch (bundleError) {
+        const bundleMessage = bundleError instanceof Error ? bundleError.message : String(bundleError);
+        this.outputChannel.appendLine(`Warning: Failed to bundle ${filePath}: ${bundleMessage}. Using raw parsed content.`);
+        spec = parsed as OpenAPI.Document;
+      }
       const version = this.getSpecVersion(spec);
       const apiFile: ApiFile = {
         filePath,
@@ -85,7 +93,7 @@ export class OpenApiService {
         description: this.getDescription(spec),
         servers: this.getServers(spec),
         endpoints: this.extractEndpoints(filePath, spec),
-        components: this.extractComponents(spec)
+        components: this.extractComponents(spec, filePath)
       };
 
       this.cache.set(filePath, { mtime: stat.mtimeMs, apiFile });
@@ -124,6 +132,57 @@ export class OpenApiService {
   }
 
   private extractSchemaFromRaw(schema: Record<string, unknown>): SchemaObject {
+    // Handle allOf - merge all schemas into one
+    if (schema.allOf && Array.isArray(schema.allOf)) {
+      const extractedSchemas: SchemaObject[] = [];
+      for (const subSchema of schema.allOf) {
+        if (subSchema && typeof subSchema === 'object') {
+          extractedSchemas.push(this.extractSchemaFromRaw(subSchema as Record<string, unknown>));
+        }
+      }
+      const merged = this.mergeAllOfSchemas(extractedSchemas);
+      // Preserve any top-level properties from the original schema
+      if (schema.type) merged.type = schema.type as string;
+      if (schema.description) merged.description = schema.description as string;
+      return merged;
+    }
+
+    // Handle oneOf - preserve as array
+    if (schema.oneOf && Array.isArray(schema.oneOf)) {
+      const result: SchemaObject = {
+        type: schema.type as string | undefined,
+        description: schema.description as string | undefined,
+        oneOf: []
+      };
+      for (const subSchema of schema.oneOf) {
+        if (subSchema && typeof subSchema === 'object') {
+          result.oneOf!.push(this.extractSchemaFromRaw(subSchema as Record<string, unknown>));
+        }
+      }
+      if (schema.discriminator) {
+        result.discriminator = schema.discriminator as SchemaObject['discriminator'];
+      }
+      return result;
+    }
+
+    // Handle anyOf - preserve as array
+    if (schema.anyOf && Array.isArray(schema.anyOf)) {
+      const result: SchemaObject = {
+        type: schema.type as string | undefined,
+        description: schema.description as string | undefined,
+        anyOf: []
+      };
+      for (const subSchema of schema.anyOf) {
+        if (subSchema && typeof subSchema === 'object') {
+          result.anyOf!.push(this.extractSchemaFromRaw(subSchema as Record<string, unknown>));
+        }
+      }
+      if (schema.discriminator) {
+        result.discriminator = schema.discriminator as SchemaObject['discriminator'];
+      }
+      return result;
+    }
+
     const result: SchemaObject = {
       type: schema.type as string | undefined,
       format: schema.format as string | undefined,
@@ -239,9 +298,9 @@ export class OpenApiService {
           description: operation.description,
           tags: operation.tags,
           deprecated: operation.deprecated,
-          parameters: this.extractParameters(operation, pathItem, spec),
-          requestBody: this.extractRequestBody(operation, spec),
-          responses: this.extractResponses(operation, spec)
+          parameters: this.extractParameters(operation, pathItem, spec, filePath),
+          requestBody: this.extractRequestBody(operation, spec, filePath),
+          responses: this.extractResponses(operation, spec, filePath)
         };
 
         endpoints.push(endpoint);
@@ -254,7 +313,8 @@ export class OpenApiService {
   private extractParameters(
     operation: OpenAPIV3.OperationObject | OpenAPIV2.OperationObject,
     pathItem: OpenAPIV3.PathItemObject | OpenAPIV2.PathItemObject,
-    spec: OpenAPI.Document
+    spec: OpenAPI.Document,
+    filePath?: string
   ): ApiParameter[] {
     const params: ApiParameter[] = [];
     const allParams = [
@@ -272,7 +332,7 @@ export class OpenApiService {
         description: resolved.description,
         required: resolved.required || resolved.in === 'path',
         deprecated: (resolved as OpenAPIV3.ParameterObject).deprecated,
-        schema: this.extractSchema((resolved as OpenAPIV3.ParameterObject).schema, spec),
+        schema: this.extractSchema((resolved as OpenAPIV3.ParameterObject).schema, spec, filePath),
         example: (resolved as OpenAPIV3.ParameterObject).example
       });
     }
@@ -282,7 +342,8 @@ export class OpenApiService {
 
   private extractRequestBody(
     operation: OpenAPIV3.OperationObject | OpenAPIV2.OperationObject,
-    spec: OpenAPI.Document
+    spec: OpenAPI.Document,
+    filePath?: string
   ): ApiRequestBody | undefined {
     const v3Operation = operation as OpenAPIV3.OperationObject;
 
@@ -293,7 +354,7 @@ export class OpenApiService {
       const content: Record<string, MediaTypeObject> = {};
       for (const [mediaType, mediaTypeObj] of Object.entries(resolved.content || {})) {
         content[mediaType] = {
-          schema: this.extractSchema(mediaTypeObj.schema, spec),
+          schema: this.extractSchema(mediaTypeObj.schema, spec, filePath),
           example: mediaTypeObj.example,
           examples: mediaTypeObj.examples as Record<string, { summary?: string; description?: string; value?: unknown }>
         };
@@ -318,7 +379,7 @@ export class OpenApiService {
         required: bodyParam.required || false,
         content: {
           'application/json': {
-            schema: this.extractSchema(bodyParam.schema, spec)
+            schema: this.extractSchema(bodyParam.schema, spec, filePath)
           }
         }
       };
@@ -329,7 +390,8 @@ export class OpenApiService {
 
   private extractResponses(
     operation: OpenAPIV3.OperationObject | OpenAPIV2.OperationObject,
-    spec: OpenAPI.Document
+    spec: OpenAPI.Document,
+    filePath?: string
   ): ApiResponse[] {
     const responses: ApiResponse[] = [];
 
@@ -350,7 +412,7 @@ export class OpenApiService {
         apiResponse.content = {};
         for (const [mediaType, mediaTypeObj] of Object.entries(v3Response.content)) {
           apiResponse.content[mediaType] = {
-            schema: this.extractSchema(mediaTypeObj.schema, spec),
+            schema: this.extractSchema(mediaTypeObj.schema, spec, filePath),
             example: mediaTypeObj.example
           };
         }
@@ -361,7 +423,7 @@ export class OpenApiService {
       if (v2Response.schema) {
         apiResponse.content = {
           'application/json': {
-            schema: this.extractSchema(v2Response.schema, spec)
+            schema: this.extractSchema(v2Response.schema, spec, filePath)
           }
         };
       }
@@ -374,7 +436,8 @@ export class OpenApiService {
 
   private extractSchema(
     schema: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject | OpenAPIV2.SchemaObject | undefined,
-    spec: OpenAPI.Document
+    spec: OpenAPI.Document,
+    filePath?: string
   ): SchemaObject | undefined {
     if (!schema) return undefined;
 
@@ -382,6 +445,21 @@ export class OpenApiService {
     const refObj = schema as { $ref?: string };
     let refName: string | undefined;
     if (refObj.$ref) {
+      // Check if it's an external ref (doesn't start with #)
+      if (!refObj.$ref.startsWith('#') && filePath) {
+        const externalResolved = this.resolveExternalRef(refObj.$ref, filePath, spec);
+        if (externalResolved) {
+          // Extract the last part of the path as the ref name
+          const refParts = refObj.$ref.split('/');
+          refName = this.decodeJsonPointer(refParts[refParts.length - 1]);
+          // Process the externally resolved schema
+          const result = this.extractSchema(externalResolved as OpenAPIV3.SchemaObject, spec, filePath);
+          if (result) {
+            result.$ref = refName;
+          }
+          return result;
+        }
+      }
       // Extract component name from $ref like "#/components/schemas/User" or "#/definitions/User"
       const refParts = refObj.$ref.split('/');
       refName = refParts[refParts.length - 1];
@@ -389,6 +467,64 @@ export class OpenApiService {
 
     const resolved = this.resolveRef(schema, spec) as OpenAPIV3.SchemaObject | OpenAPIV2.SchemaObject;
     if (!resolved) return undefined;
+
+    // Handle allOf - merge all schemas into one
+    const resolvedAny = resolved as Record<string, unknown>;
+    if (resolvedAny.allOf && Array.isArray(resolvedAny.allOf)) {
+      const extractedSchemas: SchemaObject[] = [];
+      for (const subSchema of resolvedAny.allOf) {
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        if (extracted) {
+          extractedSchemas.push(extracted);
+        }
+      }
+      const merged = this.mergeAllOfSchemas(extractedSchemas);
+      // Preserve any top-level properties from the original schema
+      if (resolvedAny.type) merged.type = resolvedAny.type as string;
+      if (resolvedAny.description) merged.description = resolvedAny.description as string;
+      if (refName) merged.$ref = refName;
+      return merged;
+    }
+
+    // Handle oneOf - preserve as array
+    if (resolvedAny.oneOf && Array.isArray(resolvedAny.oneOf)) {
+      const result: SchemaObject = {
+        type: resolvedAny.type as string | undefined,
+        description: resolvedAny.description as string | undefined,
+        oneOf: []
+      };
+      for (const subSchema of resolvedAny.oneOf) {
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        if (extracted) {
+          result.oneOf!.push(extracted);
+        }
+      }
+      if (resolvedAny.discriminator) {
+        result.discriminator = resolvedAny.discriminator as SchemaObject['discriminator'];
+      }
+      if (refName) result.$ref = refName;
+      return result;
+    }
+
+    // Handle anyOf - preserve as array
+    if (resolvedAny.anyOf && Array.isArray(resolvedAny.anyOf)) {
+      const result: SchemaObject = {
+        type: resolvedAny.type as string | undefined,
+        description: resolvedAny.description as string | undefined,
+        anyOf: []
+      };
+      for (const subSchema of resolvedAny.anyOf) {
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        if (extracted) {
+          result.anyOf!.push(extracted);
+        }
+      }
+      if (resolvedAny.discriminator) {
+        result.discriminator = resolvedAny.discriminator as SchemaObject['discriminator'];
+      }
+      if (refName) result.$ref = refName;
+      return result;
+    }
 
     // Start with a shallow copy of all properties to preserve any custom/unknown fields
     const result: SchemaObject = { ...resolved } as SchemaObject;
@@ -402,13 +538,13 @@ export class OpenApiService {
     if (resolved.properties) {
       result.properties = {};
       for (const [key, value] of Object.entries(resolved.properties)) {
-        result.properties[key] = this.extractSchema(value, spec) || {};
+        result.properties[key] = this.extractSchema(value, spec, filePath) || {};
       }
     }
 
     // Recursively process array items
     if ('items' in resolved && resolved.items) {
-      result.items = this.extractSchema(resolved.items as OpenAPIV3.SchemaObject, spec);
+      result.items = this.extractSchema(resolved.items as OpenAPIV3.SchemaObject, spec, filePath);
     }
 
     return result;
@@ -432,6 +568,195 @@ export class OpenApiService {
     }
 
     return resolved;
+  }
+
+  /**
+   * Decode JSON Pointer escape sequences per RFC 6901
+   * ~1 -> /
+   * ~0 -> ~
+   */
+  private decodeJsonPointer(pointer: string): string {
+    return pointer.replace(/~1/g, '/').replace(/~0/g, '~');
+  }
+
+  /**
+   * Resolve external $ref paths (relative file references)
+   * e.g., "../components/responses/successResponse/content/application~1json/schema"
+   */
+  private resolveExternalRef(
+    refPath: string,
+    currentFilePath: string,
+    spec: OpenAPI.Document
+  ): unknown {
+    try {
+      // Split into file path and JSON pointer parts
+      const hashIndex = refPath.indexOf('#');
+      let filePart: string;
+      let pointerPart: string;
+
+      if (hashIndex !== -1) {
+        filePart = refPath.substring(0, hashIndex);
+        pointerPart = refPath.substring(hashIndex + 1);
+      } else {
+        // No hash means the entire path is a file path with embedded pointer
+        // e.g., "../components/responses/successResponse/content/application~1json/schema"
+        filePart = refPath;
+        pointerPart = '';
+      }
+
+      // If there's a file part, resolve and load the external file
+      let targetSpec: unknown = spec;
+      let foundFile = false;
+
+      if (filePart) {
+        const currentDir = path.dirname(currentFilePath);
+        const externalFilePath = path.resolve(currentDir, filePart);
+
+        // Check if it's a JSON file path or a path within the directory structure
+        if (fs.existsSync(externalFilePath) && externalFilePath.endsWith('.json')) {
+          const content = fs.readFileSync(externalFilePath, 'utf-8');
+          targetSpec = JSON.parse(content);
+          foundFile = true;
+        } else {
+          // Treat the entire refPath as a relative path within the project
+          // Navigate through the directory structure
+          const parts = refPath.split('/');
+          let currentPath = currentDir;
+          let jsonPointerParts: string[] = [];
+
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (part === '..') {
+              currentPath = path.dirname(currentPath);
+            } else if (part === '.') {
+              continue;
+            } else {
+              const testPath = path.join(currentPath, part);
+              const testJsonPath = testPath.endsWith('.json') ? testPath : testPath + '.json';
+
+              if (fs.existsSync(testJsonPath)) {
+                const content = fs.readFileSync(testJsonPath, 'utf-8');
+                targetSpec = JSON.parse(content);
+                jsonPointerParts = parts.slice(i + 1);
+                foundFile = true;
+                break;
+              } else if (fs.existsSync(testPath) && fs.statSync(testPath).isDirectory()) {
+                currentPath = testPath;
+              } else {
+                // Remaining parts are JSON pointer
+                jsonPointerParts = parts.slice(i);
+                break;
+              }
+            }
+          }
+
+          if (jsonPointerParts.length > 0) {
+            pointerPart = '/' + jsonPointerParts.join('/');
+          }
+        }
+      }
+
+      // If no external file was found, return undefined
+      if (!foundFile && filePart) {
+        this.outputChannel.appendLine(`External ref file not found: ${refPath}`);
+        return undefined;
+      }
+
+      // Navigate the JSON pointer path
+      if (pointerPart) {
+        const pointerPath = pointerPart.replace(/^\//, '').split('/');
+        let resolved: unknown = targetSpec;
+
+        for (const part of pointerPath) {
+          const decodedPart = this.decodeJsonPointer(part);
+          if (resolved && typeof resolved === 'object') {
+            resolved = (resolved as Record<string, unknown>)[decodedPart];
+          } else {
+            return undefined;
+          }
+        }
+
+        // If resolution failed, try with 'components' prefix
+        // This handles cases where the file has a components wrapper
+        // e.g., ref is "/schemas/Product" but file structure is "/components/schemas/Product"
+        if (resolved === undefined) {
+          const targetSpecObj = targetSpec as Record<string, unknown>;
+          if (targetSpecObj.components && typeof targetSpecObj.components === 'object') {
+            resolved = targetSpecObj.components;
+            for (const part of pointerPath) {
+              const decodedPart = this.decodeJsonPointer(part);
+              if (resolved && typeof resolved === 'object') {
+                resolved = (resolved as Record<string, unknown>)[decodedPart];
+              } else {
+                return undefined;
+              }
+            }
+          }
+        }
+
+        return resolved;
+      }
+
+      return targetSpec;
+    } catch (error) {
+      this.outputChannel.appendLine(`Error resolving external ref ${refPath}: ${error}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Merge multiple schemas from allOf into a single flattened schema
+   */
+  private mergeAllOfSchemas(schemas: SchemaObject[]): SchemaObject {
+    const merged: SchemaObject = {
+      type: 'object',
+      properties: {},
+      required: [],
+      _mergedFrom: []
+    };
+
+    for (const schema of schemas) {
+      // Track source refs
+      if (schema.$ref) {
+        merged._mergedFrom!.push(schema.$ref);
+      }
+
+      // Merge type (prefer 'object' if any schema has it)
+      if (schema.type) {
+        merged.type = schema.type;
+      }
+
+      // Merge properties
+      if (schema.properties) {
+        merged.properties = { ...merged.properties, ...schema.properties };
+      }
+
+      // Merge required arrays
+      if (schema.required) {
+        merged.required = [...new Set([...merged.required!, ...schema.required])];
+      }
+
+      // Merge other scalar properties (last one wins)
+      if (schema.description) merged.description = schema.description;
+      if (schema.format) merged.format = schema.format;
+      if (schema.example !== undefined) merged.example = schema.example;
+      if (schema.default !== undefined) merged.default = schema.default;
+      if (schema.nullable !== undefined) merged.nullable = schema.nullable;
+      if (schema.readOnly !== undefined) merged.readOnly = schema.readOnly;
+      if (schema.writeOnly !== undefined) merged.writeOnly = schema.writeOnly;
+      if (schema.deprecated !== undefined) merged.deprecated = schema.deprecated;
+      if (schema.discriminator) merged.discriminator = schema.discriminator;
+
+      // Merge items for array types
+      if (schema.items) merged.items = schema.items;
+    }
+
+    // Clean up empty arrays
+    if (merged.required!.length === 0) delete merged.required;
+    if (merged._mergedFrom!.length === 0) delete merged._mergedFrom;
+    if (Object.keys(merged.properties!).length === 0) delete merged.properties;
+
+    return merged;
   }
 
   private isOpenApiSpec(obj: unknown): boolean {
@@ -484,7 +809,7 @@ export class OpenApiService {
     return [];
   }
 
-  private extractComponents(spec: OpenAPI.Document): Record<string, Record<string, SchemaObject>> | undefined {
+  private extractComponents(spec: OpenAPI.Document, filePath?: string): Record<string, Record<string, SchemaObject>> | undefined {
     const result: Record<string, Record<string, SchemaObject>> = {};
 
     // OpenAPI 3.x components
@@ -493,7 +818,7 @@ export class OpenApiService {
       if (v3Spec.components.schemas) {
         result.schemas = {};
         for (const [name, schema] of Object.entries(v3Spec.components.schemas)) {
-          result.schemas[name] = this.extractSchema(schema, spec) || {};
+          result.schemas[name] = this.extractSchema(schema, spec, filePath) || {};
         }
       }
       if (v3Spec.components.responses) {
@@ -527,7 +852,7 @@ export class OpenApiService {
     if (v2Spec.definitions) {
       result.schemas = {};
       for (const [name, schema] of Object.entries(v2Spec.definitions)) {
-        result.schemas[name] = this.extractSchema(schema, spec) || {};
+        result.schemas[name] = this.extractSchema(schema, spec, filePath) || {};
       }
     }
 

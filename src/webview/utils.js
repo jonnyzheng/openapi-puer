@@ -66,13 +66,40 @@ window.OpenAPIPuer.renderSchemaValue = function(schema, indent, isLast) {
   const nextPad = '  '.repeat(indent + 1);
 
   const refBadge = schema.$ref ? `<span class="json-ref">#${escapeHtml(schema.$ref)}</span> ` : '';
+  const mergedBadge = schema._mergedFrom && schema._mergedFrom.length > 0
+    ? `<span class="schema-merged-indicator">(merged: ${schema._mergedFrom.map(r => escapeHtml(r)).join(', ')})</span> `
+    : '';
+
+  // Handle oneOf - display as alternatives
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    let html = `${refBadge}<span class="schema-keyword">oneOf</span> [\n`;
+    schema.oneOf.forEach((option, i) => {
+      const isLastOption = i === schema.oneOf.length - 1;
+      const comma = isLastOption ? '' : '<span class="json-comma">,</span>';
+      html += `${nextPad}${renderSchemaValue(option, indent + 1, isLastOption)}${comma}\n`;
+    });
+    html += `${pad}]`;
+    return html;
+  }
+
+  // Handle anyOf - display as alternatives
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    let html = `${refBadge}<span class="schema-keyword">anyOf</span> [\n`;
+    schema.anyOf.forEach((option, i) => {
+      const isLastOption = i === schema.anyOf.length - 1;
+      const comma = isLastOption ? '' : '<span class="json-comma">,</span>';
+      html += `${nextPad}${renderSchemaValue(option, indent + 1, isLastOption)}${comma}\n`;
+    });
+    html += `${pad}]`;
+    return html;
+  }
 
   if (schema.type === 'object' && schema.properties) {
     const props = Object.entries(schema.properties);
     if (props.length === 0) {
-      return `${refBadge}<span class="json-brace">{}</span>`;
+      return `${refBadge}${mergedBadge}<span class="json-brace">{}</span>`;
     }
-    let html = `${refBadge}<span class="json-brace">{</span>\n`;
+    let html = `${refBadge}${mergedBadge}<span class="json-brace">{</span>\n`;
     props.forEach(([key, prop], i) => {
       const isLastProp = i === props.length - 1;
       const required = schema.required?.includes(key);
@@ -115,12 +142,41 @@ window.OpenAPIPuer.renderSchema = function(schema, indent, isLast) {
   const nextPad = '  '.repeat(indent + 1);
   let html = '';
 
+  // Handle oneOf at top level
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    html += `<span class="schema-keyword">oneOf</span> [\n`;
+    schema.oneOf.forEach((option, i) => {
+      const isLastOption = i === schema.oneOf.length - 1;
+      const comma = isLastOption ? '' : '<span class="json-comma">,</span>';
+      html += `${nextPad}${renderSchemaValue(option, indent + 1, isLastOption)}${comma}\n`;
+    });
+    html += `${pad}]`;
+    return html;
+  }
+
+  // Handle anyOf at top level
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    html += `<span class="schema-keyword">anyOf</span> [\n`;
+    schema.anyOf.forEach((option, i) => {
+      const isLastOption = i === schema.anyOf.length - 1;
+      const comma = isLastOption ? '' : '<span class="json-comma">,</span>';
+      html += `${nextPad}${renderSchemaValue(option, indent + 1, isLastOption)}${comma}\n`;
+    });
+    html += `${pad}]`;
+    return html;
+  }
+
+  // Show merged indicator for allOf results
+  const mergedBadge = schema._mergedFrom && schema._mergedFrom.length > 0
+    ? `<span class="schema-merged-indicator">(merged: ${schema._mergedFrom.map(r => escapeHtml(r)).join(', ')})</span> `
+    : '';
+
   if (schema.type === 'object' && schema.properties) {
     const props = Object.entries(schema.properties);
     if (props.length === 0) {
-      html += `<span class="json-brace">{}</span>`;
+      html += `${mergedBadge}<span class="json-brace">{}</span>`;
     } else {
-      html += `<span class="json-brace">{</span>\n`;
+      html += `${mergedBadge}<span class="json-brace">{</span>\n`;
       props.forEach(([key, prop], i) => {
         const isLastProp = i === props.length - 1;
         const required = schema.required?.includes(key);
@@ -152,6 +208,17 @@ window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
   if (schema.example !== undefined) return schema.example;
   if (schema.default !== undefined) return schema.default;
 
+  // Handle oneOf/anyOf - use first option for sample
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    return generateSampleFromSchema(schema.oneOf[0]);
+  }
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    return generateSampleFromSchema(schema.anyOf[0]);
+  }
+
+  // Handle merged allOf schemas (they have _mergedFrom but are already flattened)
+  // Just continue with normal processing since properties are already merged
+
   switch (schema.type) {
     case 'object':
       const obj = {};
@@ -176,6 +243,14 @@ window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
     case 'boolean':
       return true;
     default:
+      // If no type but has properties, treat as object
+      if (schema.properties) {
+        const obj = {};
+        for (const [key, prop] of Object.entries(schema.properties)) {
+          obj[key] = generateSampleFromSchema(prop);
+        }
+        return obj;
+      }
       return null;
   }
 };
@@ -184,6 +259,14 @@ window.OpenAPIPuer.generateSampleFromSchema = function(schema) {
 window.OpenAPIPuer.generateEmptyTemplateFromSchema = function(schema) {
   const generateEmptyTemplateFromSchema = window.OpenAPIPuer.generateEmptyTemplateFromSchema;
   if (!schema) return null;
+
+  // Handle oneOf/anyOf - use first option for template
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    return generateEmptyTemplateFromSchema(schema.oneOf[0]);
+  }
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    return generateEmptyTemplateFromSchema(schema.anyOf[0]);
+  }
 
   // If schema has properties but no type, treat it as object
   if (schema.properties && !schema.type) {
