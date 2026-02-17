@@ -2032,6 +2032,354 @@ export class OpenApiService {
     }
   }
 
+  // ==================== Response CRUD Methods ====================
+
+  async addResponse(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    response: {
+      statusCode: string;
+      description?: string;
+      contentType?: string;
+      schema?: object;
+    }
+  ): Promise<{ success: boolean; message?: string }> {
+    return this.withWriteLock(filePath, async () => {
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const spec = JSON.parse(content);
+
+        const pathObj = spec.paths?.[endpointPath];
+        if (!pathObj) {
+          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        }
+
+        const operation = pathObj[method.toLowerCase()];
+        if (!operation) {
+          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
+        }
+
+        // Initialize responses object if it doesn't exist
+        if (!operation.responses) {
+          operation.responses = {};
+        }
+
+        // Check for duplicate status code
+        if (operation.responses[response.statusCode]) {
+          return { success: false, message: `Response ${response.statusCode} already exists` };
+        }
+
+        // Create the new response object
+        const newResponse: Record<string, unknown> = {
+          description: response.description || `Response for status ${response.statusCode}`
+        };
+
+        // Add content if contentType and schema provided
+        if (response.contentType && response.schema) {
+          newResponse.content = {
+            [response.contentType]: {
+              schema: response.schema
+            }
+          };
+        } else if (response.contentType) {
+          newResponse.content = {
+            [response.contentType]: {
+              schema: { type: 'object' }
+            }
+          };
+        }
+
+        operation.responses[response.statusCode] = newResponse;
+
+        const updatedContent = JSON.stringify(spec, null, 2);
+        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+        this.removeFromCache(filePath);
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Error adding response: ${message}`);
+        return { success: false, message };
+      }
+    });
+  }
+
+  async updateResponse(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    statusCode: string,
+    updates: {
+      statusCode?: string;
+      description?: string;
+      contentType?: string;
+      schema?: object;
+      headers?: object;
+      examples?: object;
+    }
+  ): Promise<{ success: boolean; message?: string }> {
+    return this.withWriteLock(filePath, async () => {
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const spec = JSON.parse(content);
+
+        const pathObj = spec.paths?.[endpointPath];
+        if (!pathObj) {
+          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        }
+
+        const operation = pathObj[method.toLowerCase()];
+        if (!operation) {
+          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
+        }
+
+        if (!operation.responses || !operation.responses[statusCode]) {
+          return { success: false, message: `Response ${statusCode} not found` };
+        }
+
+        const response = operation.responses[statusCode];
+
+        // Update description
+        if (updates.description !== undefined) {
+          response.description = updates.description;
+        }
+
+        // Update content type and schema
+        if (updates.contentType !== undefined || updates.schema !== undefined) {
+          if (!response.content) {
+            response.content = {};
+          }
+
+          const currentContentType = Object.keys(response.content)[0] || 'application/json';
+          const targetContentType = updates.contentType || currentContentType;
+
+          // If content type changed, move the content
+          if (updates.contentType && updates.contentType !== currentContentType && response.content[currentContentType]) {
+            response.content[targetContentType] = response.content[currentContentType];
+            delete response.content[currentContentType];
+          }
+
+          // Ensure target content type exists
+          if (!response.content[targetContentType]) {
+            response.content[targetContentType] = {};
+          }
+
+          // Update schema
+          if (updates.schema !== undefined) {
+            response.content[targetContentType].schema = updates.schema;
+          }
+        }
+
+        // Update headers
+        if (updates.headers !== undefined) {
+          if (Object.keys(updates.headers).length > 0) {
+            response.headers = updates.headers;
+          } else {
+            delete response.headers;
+          }
+        }
+
+        // Update examples
+        if (updates.examples !== undefined) {
+          const contentType = Object.keys(response.content || {})[0];
+          if (contentType && response.content[contentType]) {
+            if (Object.keys(updates.examples).length > 0) {
+              response.content[contentType].examples = updates.examples;
+            } else {
+              delete response.content[contentType].examples;
+            }
+          }
+        }
+
+        // Handle status code change (must be last as it changes the key)
+        if (updates.statusCode && updates.statusCode !== statusCode) {
+          // Check if new status code already exists
+          if (operation.responses[updates.statusCode]) {
+            return { success: false, message: `Response ${updates.statusCode} already exists` };
+          }
+
+          // Preserve order by rebuilding the responses object
+          const newResponses: Record<string, unknown> = {};
+          for (const [code, resp] of Object.entries(operation.responses)) {
+            if (code === statusCode) {
+              newResponses[updates.statusCode] = resp;
+            } else {
+              newResponses[code] = resp;
+            }
+          }
+          operation.responses = newResponses;
+        }
+
+        const updatedContent = JSON.stringify(spec, null, 2);
+        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+        this.removeFromCache(filePath);
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Error updating response: ${message}`);
+        return { success: false, message };
+      }
+    });
+  }
+
+  async deleteResponse(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    statusCode: string
+  ): Promise<{ success: boolean; message?: string }> {
+    return this.withWriteLock(filePath, async () => {
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const spec = JSON.parse(content);
+
+        const pathObj = spec.paths?.[endpointPath];
+        if (!pathObj) {
+          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        }
+
+        const operation = pathObj[method.toLowerCase()];
+        if (!operation) {
+          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
+        }
+
+        if (!operation.responses || !operation.responses[statusCode]) {
+          return { success: false, message: `Response ${statusCode} not found` };
+        }
+
+        delete operation.responses[statusCode];
+
+        // If responses object is empty, keep at least one default response
+        if (Object.keys(operation.responses).length === 0) {
+          operation.responses = {
+            '200': { description: 'Successful response' }
+          };
+        }
+
+        const updatedContent = JSON.stringify(spec, null, 2);
+        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+        this.removeFromCache(filePath);
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Error deleting response: ${message}`);
+        return { success: false, message };
+      }
+    });
+  }
+
+  async reorderResponses(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    orderedStatusCodes: string[]
+  ): Promise<{ success: boolean; message?: string }> {
+    return this.withWriteLock(filePath, async () => {
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const spec = JSON.parse(content);
+
+        const pathObj = spec.paths?.[endpointPath];
+        if (!pathObj) {
+          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        }
+
+        const operation = pathObj[method.toLowerCase()];
+        if (!operation) {
+          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
+        }
+
+        if (!operation.responses) {
+          return { success: false, message: 'No responses to reorder' };
+        }
+
+        // Rebuild responses object in new order
+        const newResponses: Record<string, unknown> = {};
+
+        // First add responses in the specified order
+        for (const statusCode of orderedStatusCodes) {
+          if (operation.responses[statusCode]) {
+            newResponses[statusCode] = operation.responses[statusCode];
+          }
+        }
+
+        // Add any responses that weren't in the ordered list (shouldn't happen, but safety)
+        for (const [statusCode, response] of Object.entries(operation.responses)) {
+          if (!newResponses[statusCode]) {
+            newResponses[statusCode] = response;
+          }
+        }
+
+        operation.responses = newResponses;
+
+        const updatedContent = JSON.stringify(spec, null, 2);
+        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+        this.removeFromCache(filePath);
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Error reordering responses: ${message}`);
+        return { success: false, message };
+      }
+    });
+  }
+
+  async updateResponseSource(
+    filePath: string,
+    endpointPath: string,
+    method: string,
+    statusCode: string,
+    sourceJson: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    return this.withWriteLock(filePath, async () => {
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const spec = JSON.parse(content);
+
+        const pathObj = spec.paths?.[endpointPath];
+        if (!pathObj) {
+          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        }
+
+        const operation = pathObj[method.toLowerCase()];
+        if (!operation) {
+          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
+        }
+
+        if (!operation.responses) {
+          operation.responses = {};
+        }
+
+        // Validate that sourceJson has required fields
+        if (!sourceJson.description && typeof sourceJson.description !== 'string') {
+          sourceJson.description = `Response for status ${statusCode}`;
+        }
+
+        // Replace the entire response object
+        operation.responses[statusCode] = sourceJson;
+
+        const updatedContent = JSON.stringify(spec, null, 2);
+        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+
+        this.removeFromCache(filePath);
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Error updating response source: ${message}`);
+        return { success: false, message };
+      }
+    });
+  }
+
   dispose(): void {
     this.outputChannel.dispose();
   }

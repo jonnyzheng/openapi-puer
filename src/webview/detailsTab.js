@@ -1616,6 +1616,629 @@
     S.updateQueryParamsPreview(S.currentEndpoint);
   };
 
+  // ==================== Response CRUD Functions ====================
+
+  S.createEditableResponseItem = function(response, index) {
+    const escapeHtml = S.escapeHtml;
+    const renderSchema = S.renderSchema;
+    const getStatusClass = S.getStatusClass;
+    const statusClass = getStatusClass(response.statusCode);
+
+    const container = document.createElement('div');
+    container.className = 'response-item editable-response';
+    container.draggable = true;
+    container.dataset.statusCode = response.statusCode;
+    container.dataset.index = index;
+
+    // Header with drag handle, status code, description, and actions
+    const header = document.createElement('div');
+    header.className = 'response-header';
+
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'response-drag-handle';
+    dragHandle.innerHTML = '⋮⋮';
+    dragHandle.title = 'Drag to reorder';
+    header.appendChild(dragHandle);
+
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `status-code ${statusClass}`;
+    statusBadge.textContent = response.statusCode;
+    header.appendChild(statusBadge);
+
+    const descSpan = document.createElement('span');
+    descSpan.className = 'response-description';
+    descSpan.textContent = response.description || '';
+    header.appendChild(descSpan);
+
+    const actions = document.createElement('div');
+    actions.className = 'response-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'icon-btn';
+    editBtn.innerHTML = '✎';
+    editBtn.title = 'Edit response';
+    editBtn.addEventListener('click', () => S.showEditResponseDialog(response, index));
+    actions.appendChild(editBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'icon-btn danger';
+    deleteBtn.innerHTML = '🗑';
+    deleteBtn.title = 'Delete response';
+    deleteBtn.addEventListener('click', () => {
+      S.showConfirmDialog({
+        title: 'Delete Response',
+        message: 'Are you sure you want to delete response <code>' + S.escapeHtml(response.statusCode) + '</code>?',
+        confirmText: 'Delete',
+        confirmClass: 'server-dialog-delete',
+        onConfirm: function() {
+          S.deleteResponse(response.statusCode);
+        }
+      });
+    });
+    actions.appendChild(deleteBtn);
+
+    header.appendChild(actions);
+    container.appendChild(header);
+
+    // Tabs container
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'response-tabs';
+
+    const visualTab = document.createElement('button');
+    visualTab.className = 'response-tab-btn active';
+    visualTab.textContent = 'Visual';
+    visualTab.dataset.tab = 'visual';
+    tabsContainer.appendChild(visualTab);
+
+    const sourceTab = document.createElement('button');
+    sourceTab.className = 'response-tab-btn';
+    sourceTab.textContent = 'Source';
+    sourceTab.dataset.tab = 'source';
+    tabsContainer.appendChild(sourceTab);
+
+    container.appendChild(tabsContainer);
+
+    // Visual tab content
+    const visualContent = document.createElement('div');
+    visualContent.className = 'response-tab-content active';
+    visualContent.dataset.tab = 'visual';
+
+    if (response.content) {
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'response-content-section';
+
+      for (const [contentType, media] of Object.entries(response.content)) {
+        const contentTypeDiv = document.createElement('div');
+        contentTypeDiv.className = 'response-content-type';
+
+        const ctLabel = document.createElement('p');
+        const componentName = media.schema?.$ref ? `<span class="component-badge">${escapeHtml(media.schema.$ref)}</span>` : '';
+        ctLabel.innerHTML = `<strong>${escapeHtml(contentType)}</strong> ${componentName}`;
+        contentTypeDiv.appendChild(ctLabel);
+
+        if (media.schema) {
+          const schemaViewer = document.createElement('div');
+          schemaViewer.className = 'schema-viewer';
+          schemaViewer.innerHTML = renderSchema(media.schema);
+          contentTypeDiv.appendChild(schemaViewer);
+        }
+
+        // Collapsible headers section
+        if (response.headers && Object.keys(response.headers).length > 0) {
+          const headersSection = document.createElement('details');
+          headersSection.className = 'response-subsection';
+          headersSection.innerHTML = `<summary>Headers (${Object.keys(response.headers).length})</summary>`;
+          const headersList = document.createElement('div');
+          headersList.className = 'headers-list';
+          for (const [hName, hValue] of Object.entries(response.headers)) {
+            headersList.innerHTML += `<div class="header-item"><strong>${escapeHtml(hName)}</strong>: ${escapeHtml(hValue.description || '')}</div>`;
+          }
+          headersSection.appendChild(headersList);
+          contentTypeDiv.appendChild(headersSection);
+        }
+
+        // Collapsible examples section
+        if (media.examples && Object.keys(media.examples).length > 0) {
+          const examplesSection = document.createElement('details');
+          examplesSection.className = 'response-subsection';
+          examplesSection.innerHTML = `<summary>Examples (${Object.keys(media.examples).length})</summary>`;
+          const examplesList = document.createElement('div');
+          examplesList.className = 'examples-list';
+          for (const [eName, eValue] of Object.entries(media.examples)) {
+            examplesList.innerHTML += `<div class="example-item"><strong>${escapeHtml(eName)}</strong>: ${escapeHtml(eValue.summary || '')}</div>`;
+          }
+          examplesSection.appendChild(examplesList);
+          contentTypeDiv.appendChild(examplesSection);
+        }
+
+        contentDiv.appendChild(contentTypeDiv);
+      }
+
+      visualContent.appendChild(contentDiv);
+    } else {
+      visualContent.innerHTML = '<div class="response-content-section"><p class="text-muted">No content defined</p></div>';
+    }
+
+    container.appendChild(visualContent);
+
+    // Source tab content
+    const sourceContent = document.createElement('div');
+    sourceContent.className = 'response-tab-content';
+    sourceContent.dataset.tab = 'source';
+
+    const sourceWrapper = document.createElement('div');
+    sourceWrapper.className = 'response-source-wrapper';
+
+    // Error container for source tab
+    const sourceError = document.createElement('div');
+    sourceError.className = 'source-error';
+    sourceError.style.cssText = 'display: none; color: var(--vscode-errorForeground); margin-bottom: 12px; padding: 8px; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); border-radius: 4px;';
+    sourceWrapper.appendChild(sourceError);
+
+    // Build the source object from the response (excluding internal fields)
+    const sourceObj = S.buildResponseSourceObject(response);
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'response-source-editor';
+    textarea.value = JSON.stringify(sourceObj, null, 2);
+    textarea.spellcheck = false;
+    sourceWrapper.appendChild(textarea);
+
+    const sourceActions = document.createElement('div');
+    sourceActions.className = 'response-source-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'primary-btn';
+    saveBtn.textContent = 'Save Changes';
+    saveBtn.addEventListener('click', () => {
+      S.saveResponseSource(response.statusCode, textarea.value, sourceError);
+    });
+    sourceActions.appendChild(saveBtn);
+
+    sourceWrapper.appendChild(sourceActions);
+    sourceContent.appendChild(sourceWrapper);
+    container.appendChild(sourceContent);
+
+    // Tab switching logic
+    [visualTab, sourceTab].forEach(btn => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.response-tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.response-tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        container.querySelector(`.response-tab-content[data-tab="${btn.dataset.tab}"]`).classList.add('active');
+      });
+    });
+
+
+    // Drag and drop event handlers
+    container.addEventListener('dragstart', (e) => {
+      container.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', response.statusCode);
+    });
+
+    container.addEventListener('dragend', () => {
+      container.classList.remove('dragging');
+      document.querySelectorAll('.response-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dragging = document.querySelector('.response-item.dragging');
+      if (dragging && dragging !== container) {
+        container.classList.add('drag-over');
+      }
+    });
+
+    container.addEventListener('dragleave', () => {
+      container.classList.remove('drag-over');
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      container.classList.remove('drag-over');
+      const draggedStatusCode = e.dataTransfer.getData('text/plain');
+      const targetStatusCode = container.dataset.statusCode;
+
+      if (draggedStatusCode && draggedStatusCode !== targetStatusCode) {
+        S.handleResponseReorder(draggedStatusCode, targetStatusCode);
+      }
+    });
+
+    return container;
+  };
+
+  // Build a clean source object from the response for editing
+  S.buildResponseSourceObject = function(response) {
+    const sourceObj = {};
+
+    if (response.description) {
+      sourceObj.description = response.description;
+    }
+
+    if (response.headers && Object.keys(response.headers).length > 0) {
+      sourceObj.headers = response.headers;
+    }
+
+    if (response.content) {
+      sourceObj.content = response.content;
+    }
+
+    return sourceObj;
+  };
+
+  // Save response source from JSON editor
+  S.saveResponseSource = function(statusCode, jsonString, errorContainer) {
+    if (!S.currentEndpoint) return;
+
+    // Clear previous error
+    if (errorContainer) {
+      errorContainer.style.display = 'none';
+    }
+
+    try {
+      const sourceJson = JSON.parse(jsonString);
+
+      S.vscode.postMessage({
+        type: 'updateResponseSource',
+        payload: {
+          filePath: S.currentEndpoint.filePath,
+          path: S.currentEndpoint.path,
+          method: S.currentEndpoint.method,
+          statusCode,
+          sourceJson
+        }
+      });
+
+      // Update local state
+      const responseIndex = S.currentEndpoint.responses.findIndex(r => r.statusCode === statusCode);
+      if (responseIndex !== -1) {
+        S.currentEndpoint.responses[responseIndex] = {
+          statusCode,
+          ...sourceJson
+        };
+      }
+
+      // Re-render to show updated content
+      S.renderResponsesSection();
+    } catch (e) {
+      if (errorContainer) {
+        errorContainer.textContent = 'Invalid JSON: ' + e.message;
+        errorContainer.style.display = 'block';
+      }
+    }
+  };
+
+  S.handleResponseReorder = function(draggedStatusCode, targetStatusCode) {
+    if (!S.currentEndpoint || !S.currentEndpoint.responses) return;
+
+    const responses = S.currentEndpoint.responses;
+    const draggedIndex = responses.findIndex(r => r.statusCode === draggedStatusCode);
+    const targetIndex = responses.findIndex(r => r.statusCode === targetStatusCode);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Reorder the array
+    const [draggedItem] = responses.splice(draggedIndex, 1);
+    responses.splice(targetIndex, 0, draggedItem);
+
+    // Get new order of status codes
+    const orderedStatusCodes = responses.map(r => r.statusCode);
+
+    // Send to backend
+    S.vscode.postMessage({
+      type: 'reorderResponses',
+      payload: {
+        filePath: S.currentEndpoint.filePath,
+        path: S.currentEndpoint.path,
+        method: S.currentEndpoint.method,
+        orderedStatusCodes
+      }
+    });
+
+    // Re-render
+    S.renderResponsesSection();
+  };
+
+  S.renderResponsesSection = function() {
+    const responsesSection = document.getElementById('responses-section');
+    const responsesContent = document.getElementById('responses-content');
+
+    if (!S.currentEndpoint) {
+      responsesSection.style.display = 'none';
+      return;
+    }
+
+    const responses = S.currentEndpoint.responses || [];
+
+    responsesSection.style.display = 'block';
+    responsesContent.innerHTML = '';
+
+    // Create response items
+    responses.forEach((response, index) => {
+      const item = S.createEditableResponseItem(response, index);
+      responsesContent.appendChild(item);
+    });
+
+    // Add "Add Response" button
+    const addRow = document.createElement('div');
+    addRow.className = 'add-response-row';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-response-btn';
+    addBtn.textContent = '+ Add Response';
+    addBtn.addEventListener('click', () => S.showAddResponseDialog());
+    addRow.appendChild(addBtn);
+    responsesContent.appendChild(addRow);
+  };
+
+  S.showAddResponseDialog = function() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+
+    modal.innerHTML = `
+      <div class="modal-dialog">
+        <h4>Add Response</h4>
+        <div class="modal-field">
+          <label>Status Code</label>
+          <select id="new-response-status">
+            <option value="200">200 - OK</option>
+            <option value="201">201 - Created</option>
+            <option value="204">204 - No Content</option>
+            <option value="400">400 - Bad Request</option>
+            <option value="401">401 - Unauthorized</option>
+            <option value="403">403 - Forbidden</option>
+            <option value="404">404 - Not Found</option>
+            <option value="500">500 - Internal Server Error</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <input type="text" id="new-response-status-custom" placeholder="e.g., 422" style="display: none; margin-top: 8px;">
+        </div>
+        <div class="modal-field">
+          <label>Description</label>
+          <input type="text" id="new-response-description" placeholder="Response description">
+        </div>
+        <div class="modal-field">
+          <label>Content Type</label>
+          <select id="new-response-content-type">
+            <option value="application/json">application/json</option>
+            <option value="application/xml">application/xml</option>
+            <option value="text/plain">text/plain</option>
+            <option value="text/html">text/html</option>
+            <option value="">None</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-btn" id="cancel-add-response">Cancel</button>
+          <button class="primary-btn" id="confirm-add-response">Add</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const statusSelect = document.getElementById('new-response-status');
+    const customInput = document.getElementById('new-response-status-custom');
+
+    statusSelect.addEventListener('change', () => {
+      customInput.style.display = statusSelect.value === 'custom' ? 'block' : 'none';
+      if (statusSelect.value === 'custom') customInput.focus();
+    });
+
+    document.getElementById('cancel-add-response').addEventListener('click', () => modal.remove());
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        modal.remove();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    document.getElementById('confirm-add-response').addEventListener('click', () => {
+      let statusCode = statusSelect.value;
+      if (statusCode === 'custom') {
+        statusCode = customInput.value.trim();
+      }
+
+      if (!statusCode || !/^\d{3}$/.test(statusCode)) {
+        alert('Please enter a valid 3-digit status code');
+        return;
+      }
+
+      // Check for duplicate
+      if (S.currentEndpoint.responses && S.currentEndpoint.responses.some(r => r.statusCode === statusCode)) {
+        alert(`Response ${statusCode} already exists`);
+        return;
+      }
+
+      const description = document.getElementById('new-response-description').value.trim();
+      const contentType = document.getElementById('new-response-content-type').value;
+
+      const response = {
+        statusCode,
+        description: description || `Response for status ${statusCode}`,
+        contentType: contentType || undefined,
+        schema: contentType ? { type: 'object' } : undefined
+      };
+
+      S.vscode.postMessage({
+        type: 'addResponse',
+        payload: {
+          filePath: S.currentEndpoint.filePath,
+          path: S.currentEndpoint.path,
+          method: S.currentEndpoint.method,
+          response
+        }
+      });
+
+      // Add to local state
+      if (!S.currentEndpoint.responses) {
+        S.currentEndpoint.responses = [];
+      }
+      S.currentEndpoint.responses.push({
+        statusCode,
+        description: response.description,
+        content: contentType ? { [contentType]: { schema: { type: 'object' } } } : undefined
+      });
+
+      modal.remove();
+      S.renderResponsesSection();
+    });
+  };
+
+  S.showEditResponseDialog = function(response, index) {
+    const escapeHtml = S.escapeHtml;
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+
+    const currentContentType = response.content ? Object.keys(response.content)[0] : '';
+
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-wide">
+        <h4>Edit Response ${escapeHtml(response.statusCode)}</h4>
+        <div class="modal-error" id="edit-response-error" style="display: none; color: var(--vscode-errorForeground); margin-bottom: 12px; padding: 8px; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); border-radius: 4px;"></div>
+        <div class="modal-field">
+          <label>Status Code</label>
+          <input type="text" id="edit-response-status" value="${escapeHtml(response.statusCode)}" pattern="\\d{3}">
+        </div>
+        <div class="modal-field">
+          <label>Description</label>
+          <textarea id="edit-response-description" rows="2">${escapeHtml(response.description || '')}</textarea>
+        </div>
+        <div class="modal-field">
+          <label>Content Type</label>
+          <select id="edit-response-content-type">
+            <option value="application/json"${currentContentType === 'application/json' ? ' selected' : ''}>application/json</option>
+            <option value="application/xml"${currentContentType === 'application/xml' ? ' selected' : ''}>application/xml</option>
+            <option value="text/plain"${currentContentType === 'text/plain' ? ' selected' : ''}>text/plain</option>
+            <option value="text/html"${currentContentType === 'text/html' ? ' selected' : ''}>text/html</option>
+            <option value=""${!currentContentType ? ' selected' : ''}>None</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-btn" id="cancel-edit-response">Cancel</button>
+          <button type="button" class="primary-btn" id="confirm-edit-response">Save</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cancelBtn = document.getElementById('cancel-edit-response');
+    const confirmBtn = document.getElementById('confirm-edit-response');
+
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      modal.remove();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        modal.remove();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    confirmBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const errorDiv = document.getElementById('edit-response-error');
+      errorDiv.style.display = 'none';
+
+      const newStatusCode = document.getElementById('edit-response-status').value.trim();
+      const newDescription = document.getElementById('edit-response-description').value.trim();
+      const newContentType = document.getElementById('edit-response-content-type').value;
+
+      if (!newStatusCode || !/^\d{3}$/.test(newStatusCode)) {
+        errorDiv.textContent = 'Please enter a valid 3-digit status code';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Check for duplicate if status code changed
+      if (newStatusCode !== response.statusCode &&
+          S.currentEndpoint.responses.some(r => r.statusCode === newStatusCode)) {
+        errorDiv.textContent = `Response ${newStatusCode} already exists`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      const updates = {};
+      if (newStatusCode !== response.statusCode) updates.statusCode = newStatusCode;
+      if (newDescription !== (response.description || '')) updates.description = newDescription;
+      if (newContentType !== currentContentType) updates.contentType = newContentType;
+
+      if (Object.keys(updates).length === 0) {
+        modal.remove();
+        return;
+      }
+
+      S.vscode.postMessage({
+        type: 'updateResponse',
+        payload: {
+          filePath: S.currentEndpoint.filePath,
+          path: S.currentEndpoint.path,
+          method: S.currentEndpoint.method,
+          statusCode: response.statusCode,
+          updates
+        }
+      });
+
+      // Update local state - find the response in the array and update it
+      const responseIndex = S.currentEndpoint.responses.findIndex(r => r.statusCode === response.statusCode);
+      if (responseIndex !== -1) {
+        const targetResponse = S.currentEndpoint.responses[responseIndex];
+        if (updates.statusCode) targetResponse.statusCode = updates.statusCode;
+        if (updates.description !== undefined) targetResponse.description = updates.description;
+        if (updates.contentType !== undefined) {
+          if (updates.contentType) {
+            const oldContent = targetResponse.content ? targetResponse.content[currentContentType] : { schema: { type: 'object' } };
+            targetResponse.content = { [updates.contentType]: oldContent };
+          } else {
+            delete targetResponse.content;
+          }
+        }
+      }
+
+      modal.remove();
+      S.renderResponsesSection();
+    });
+  };
+
+  S.deleteResponse = function(statusCode) {
+    if (!S.currentEndpoint) return;
+
+    S.vscode.postMessage({
+      type: 'deleteResponse',
+      payload: {
+        filePath: S.currentEndpoint.filePath,
+        path: S.currentEndpoint.path,
+        method: S.currentEndpoint.method,
+        statusCode
+      }
+    });
+
+    // Update local state
+    const index = S.currentEndpoint.responses.findIndex(r => r.statusCode === statusCode);
+    if (index !== -1) {
+      S.currentEndpoint.responses.splice(index, 1);
+    }
+
+    S.renderResponsesSection();
+  };
+
   S.showAddParameterDialog = function(defaultLocation, showLocation) {
     if (defaultLocation === undefined) defaultLocation = 'query';
     if (showLocation === undefined) showLocation = true;
@@ -1914,34 +2537,8 @@
 
     S.renderDefinitionTabs();
 
-    const escapeHtml = S.escapeHtml;
-    const renderSchema = S.renderSchema;
-    const getStatusClass = S.getStatusClass;
-
-    const responsesSection = document.getElementById('responses-section');
-    const responsesContent = document.getElementById('responses-content');
-    if (endpoint.responses && endpoint.responses.length) {
-      responsesSection.style.display = 'block';
-      let responsesHtml = '';
-      endpoint.responses.forEach(r => {
-        const statusClass = getStatusClass(r.statusCode);
-        responsesHtml += `<div class="response-item">
-          <h5><span class="status-code ${statusClass}">${r.statusCode}</span> ${escapeHtml(r.description || '')}</h5>`;
-        if (r.content) {
-          for (const [contentType, media] of Object.entries(r.content)) {
-            const componentName = media.schema?.$ref ? `<span class="component-badge">${escapeHtml(media.schema.$ref)}</span>` : '';
-            responsesHtml += `<p><strong>${escapeHtml(contentType)}</strong> ${componentName}</p>`;
-            if (media.schema) {
-              responsesHtml += `<div class="schema-viewer">${renderSchema(media.schema)}</div>`;
-            }
-          }
-        }
-        responsesHtml += '</div>';
-      });
-      responsesContent.innerHTML = responsesHtml;
-    } else {
-      responsesSection.style.display = 'none';
-    }
+    // Render responses section with editable UI
+    S.renderResponsesSection();
 
     S.setupRequestBuilder(endpoint, servers);
 

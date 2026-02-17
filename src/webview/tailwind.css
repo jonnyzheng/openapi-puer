@@ -1384,9 +1384,14 @@ input[type="text"]:focus, textarea:focus {
   margin-bottom: 16px;
 }
 
-#responses-content .response-item h5 {
-  margin: 0 0 8px 0;
-  font-size: 13px;
+
+#responses-content .response-item:not(:first-child) {
+  margin-top: 50px;
+}
+
+#responses-content .response-item h5{
+  margin: 5px 0 5px 0;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -3409,4 +3414,270 @@ td.no-params-message {
 #schemas-editable-content::-webkit-scrollbar-corner,
 .schema-card-tab-content::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ============================================
+   RESPONSE CRUD STYLES
+   ============================================ */
+
+/* Editable response item */
+.editable-response {
+  position: relative;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  background: var(--vscode-editor-background);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.editable-response:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Response header */
+.response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  border-radius: 4px 4px 0 0;
+}
+
+.response-description {
+  flex: 1;
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Drag handle */
+.response-drag-handle {
+  cursor: grab;
+  padding: 4px 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 14px;
+  user-select: none;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.response-drag-handle:hover {
+  opacity: 1;
+}
+
+.response-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Drag and drop states */
+.editable-response.dragging {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.editable-response.drag-over {
+  border-top: 3px solid var(--vscode-focusBorder);
+  margin-top: -2px;
+}
+
+/* Response actions */
+.response-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.response-actions .icon-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.response-actions .icon-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.response-actions .icon-btn.danger:hover {
+  background: rgba(249, 62, 62, 0.2);
+  color: var(--vscode-errorForeground);
+}
+
+/* Response content section */
+.response-content-section {
+  padding: 12px;
+}
+
+.response-content-type {
+  margin-bottom: 12px;
+}
+
+.response-content-type:last-child {
+  margin-bottom: 0;
+}
+
+.response-content-type > p {
+  margin: 0 0 8px 0;
+}
+
+/* Response subsections (headers, examples) */
+.response-subsection {
+  margin-top: 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.response-subsection summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--vscode-sideBar-background);
+  border-radius: 4px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.response-subsection summary:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.response-subsection[open] summary {
+  border-radius: 4px 4px 0 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.headers-list,
+.examples-list {
+  padding: 8px 12px;
+}
+
+.header-item,
+.example-item {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.header-item:last-child,
+.example-item:last-child {
+  border-bottom: none;
+}
+
+/* Add response button */
+.add-response-row {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.add-response-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px dashed var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.add-response-btn:hover {
+  border-color: var(--vscode-focusBorder);
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* Modal dialog wide variant */
+.modal-dialog-wide {
+  min-width: 450px;
+  max-width: 600px;
+}
+
+.modal-dialog-wide textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* ============================================
+   RESPONSE TABS STYLES
+   ============================================ */
+
+/* Response block tabs */
+.response-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+}
+
+.response-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--vscode-descriptionForeground);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.response-tab-btn:hover {
+  color: var(--vscode-foreground);
+}
+
+.response-tab-btn.active {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--vscode-textLink-foreground);
+}
+
+.response-tab-content {
+  display: none;
+}
+
+.response-tab-content.active {
+  display: block;
+}
+
+/* Source editor */
+.response-source-wrapper {
+  padding: 12px;
+}
+
+.response-source-editor {
+  width: 100%;
+  min-height: 200px;
+  max-height: 400px;
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  padding: 8px;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.response-source-editor:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.response-source-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.text-muted {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
 }

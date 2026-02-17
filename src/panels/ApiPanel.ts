@@ -73,6 +73,61 @@ export class ApiPanel {
   }>();
   readonly onUpdateRequestBody = this.onUpdateRequestBodyEmitter.event;
 
+  // Response CRUD emitters
+  private onAddResponseEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    response: {
+      statusCode: string;
+      description?: string;
+      contentType?: string;
+      schema?: object;
+    };
+  }>();
+  readonly onAddResponse = this.onAddResponseEmitter.event;
+
+  private onUpdateResponseEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    statusCode: string;
+    updates: {
+      statusCode?: string;
+      description?: string;
+      contentType?: string;
+      schema?: object;
+      headers?: object;
+      examples?: object;
+    };
+  }>();
+  readonly onUpdateResponse = this.onUpdateResponseEmitter.event;
+
+  private onDeleteResponseEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    statusCode: string;
+  }>();
+  readonly onDeleteResponse = this.onDeleteResponseEmitter.event;
+
+  private onReorderResponsesEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    orderedStatusCodes: string[];
+  }>();
+  readonly onReorderResponses = this.onReorderResponsesEmitter.event;
+
+  private onUpdateResponseSourceEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    path: string;
+    method: string;
+    statusCode: string;
+    sourceJson: object;
+  }>();
+  readonly onUpdateResponseSource = this.onUpdateResponseSourceEmitter.event;
+
   private onDisposeEmitter = new vscode.EventEmitter<void>();
   readonly onDispose = this.onDisposeEmitter.event;
 
@@ -414,6 +469,60 @@ export class ApiPanel {
           path: string;
           method: string;
           requestBody: object | null;
+        });
+        break;
+      case 'addResponse':
+        this.onAddResponseEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          response: {
+            statusCode: string;
+            description?: string;
+            contentType?: string;
+            schema?: object;
+          };
+        });
+        break;
+      case 'updateResponse':
+        this.onUpdateResponseEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          statusCode: string;
+          updates: {
+            statusCode?: string;
+            description?: string;
+            contentType?: string;
+            schema?: object;
+            headers?: object;
+            examples?: object;
+          };
+        });
+        break;
+      case 'deleteResponse':
+        this.onDeleteResponseEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          statusCode: string;
+        });
+        break;
+      case 'reorderResponses':
+        this.onReorderResponsesEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          orderedStatusCodes: string[];
+        });
+        break;
+      case 'updateResponseSource':
+        this.onUpdateResponseSourceEmitter.fire(message.payload as {
+          filePath: string;
+          path: string;
+          method: string;
+          statusCode: string;
+          sourceJson: object;
         });
         break;
       case 'addServer':
@@ -825,6 +934,11 @@ export class ApiPanel {
     this.onAddParameterEmitter.dispose();
     this.onDeleteParameterEmitter.dispose();
     this.onUpdateRequestBodyEmitter.dispose();
+    this.onAddResponseEmitter.dispose();
+    this.onUpdateResponseEmitter.dispose();
+    this.onDeleteResponseEmitter.dispose();
+    this.onReorderResponsesEmitter.dispose();
+    this.onUpdateResponseSourceEmitter.dispose();
     this.onUpdatePathEmitter.dispose();
     this.onAddServerEmitter.dispose();
     this.onUpdateServerEmitter.dispose();

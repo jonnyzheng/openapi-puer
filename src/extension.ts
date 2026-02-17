@@ -692,6 +692,88 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  // Handle add response
+  panel.onAddResponse(async (data) => {
+    const result = await openApiService.addResponse(
+      data.filePath,
+      data.path,
+      data.method,
+      data.response
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle update response
+  panel.onUpdateResponse(async (data) => {
+    const result = await openApiService.updateResponse(
+      data.filePath,
+      data.path,
+      data.method,
+      data.statusCode,
+      data.updates
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle delete response
+  panel.onDeleteResponse(async (data) => {
+    const result = await openApiService.deleteResponse(
+      data.filePath,
+      data.path,
+      data.method,
+      data.statusCode
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle reorder responses
+  panel.onReorderResponses(async (data) => {
+    const result = await openApiService.reorderResponses(
+      data.filePath,
+      data.path,
+      data.method,
+      data.orderedStatusCodes
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
+  // Handle update response source
+  panel.onUpdateResponseSource(async (data) => {
+    const result = await openApiService.updateResponseSource(
+      data.filePath,
+      data.path,
+      data.method,
+      data.statusCode,
+      data.sourceJson as Record<string, unknown>
+    );
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+    }
+  });
+
   // Handle update path
   panel.onUpdatePath(async (data) => {
     const result = await openApiService.updatePath(
@@ -971,6 +1053,36 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onUpdateRequestBody(async (data) => {
     const result = await openApiService.updateRequestBody(data.filePath, data.path, data.method, data.requestBody);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onAddResponse(async (data) => {
+    const result = await openApiService.addResponse(data.filePath, data.path, data.method, data.response);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdateResponse(async (data) => {
+    const result = await openApiService.updateResponse(data.filePath, data.path, data.method, data.statusCode, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onDeleteResponse(async (data) => {
+    const result = await openApiService.deleteResponse(data.filePath, data.path, data.method, data.statusCode);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onReorderResponses(async (data) => {
+    const result = await openApiService.reorderResponses(data.filePath, data.path, data.method, data.orderedStatusCodes);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) { await refreshApiFiles(); }
+  });
+
+  panel.onUpdateResponseSource(async (data) => {
+    const result = await openApiService.updateResponseSource(data.filePath, data.path, data.method, data.statusCode, data.sourceJson as Record<string, unknown>);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) { await refreshApiFiles(); }
   });
