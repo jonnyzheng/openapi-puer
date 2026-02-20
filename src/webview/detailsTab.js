@@ -1690,6 +1690,20 @@
     visualTab.dataset.tab = 'visual';
     tabsContainer.appendChild(visualTab);
 
+    // Check if response has example data
+    const hasExample = response.content && Object.values(response.content).some(media =>
+      media.example !== undefined || (media.examples && Object.keys(media.examples).length > 0)
+    );
+
+    let exampleTab = null;
+    if (hasExample) {
+      exampleTab = document.createElement('button');
+      exampleTab.className = 'response-tab-btn';
+      exampleTab.textContent = 'Example';
+      exampleTab.dataset.tab = 'example';
+      tabsContainer.appendChild(exampleTab);
+    }
+
     const sourceTab = document.createElement('button');
     sourceTab.className = 'response-tab-btn';
     sourceTab.textContent = 'Source';
@@ -1761,6 +1775,148 @@
 
     container.appendChild(visualContent);
 
+    // Example tab content (only if examples exist)
+    if (hasExample) {
+      const exampleContent = document.createElement('div');
+      exampleContent.className = 'response-tab-content';
+      exampleContent.dataset.tab = 'example';
+
+      const exampleWrapper = document.createElement('div');
+      exampleWrapper.className = 'response-example-wrapper';
+
+      // Helper function to get Prism language info from content type
+      const getPrismLanguage = (contentType) => {
+        const ct = contentType.toLowerCase();
+        if (ct.includes('json')) {
+          return { language: 'json', grammar: typeof Prism !== 'undefined' ? Prism.languages.json : null };
+        } else if (ct.includes('xml')) {
+          return { language: 'xml', grammar: typeof Prism !== 'undefined' ? Prism.languages.xml : null };
+        } else if (ct.includes('html')) {
+          return { language: 'html', grammar: typeof Prism !== 'undefined' ? Prism.languages.html : null };
+        } else if (ct.includes('javascript')) {
+          return { language: 'javascript', grammar: typeof Prism !== 'undefined' ? Prism.languages.javascript : null };
+        } else if (ct.includes('css')) {
+          return { language: 'css', grammar: typeof Prism !== 'undefined' ? Prism.languages.css : null };
+        }
+        return { language: null, grammar: null };
+      };
+
+      // Helper function to highlight code with Prism
+      const highlightCode = (text, contentType) => {
+        const { language, grammar } = getPrismLanguage(contentType);
+        if (typeof Prism !== 'undefined' && grammar) {
+          return Prism.highlight(text, grammar, language);
+        }
+        return escapeHtml(text);
+      };
+
+      for (const [contentType, media] of Object.entries(response.content)) {
+        const { language } = getPrismLanguage(contentType);
+
+        // Handle single example
+        if (media.example !== undefined) {
+          const exampleBlock = document.createElement('div');
+          exampleBlock.className = 'response-example-block';
+
+          const exampleHeader = document.createElement('div');
+          exampleHeader.className = 'response-example-header';
+          exampleHeader.innerHTML = `<span class="response-example-content-type">${escapeHtml(contentType)}</span>`;
+          exampleBlock.appendChild(exampleHeader);
+
+          const codeWrapper = document.createElement('div');
+          codeWrapper.className = 'response-example-code-wrapper';
+
+          const rawText = typeof media.example === 'string'
+            ? media.example
+            : JSON.stringify(media.example, null, 2);
+
+          const pre = document.createElement('pre');
+          pre.className = 'response-example-code' + (language ? ' language-' + language : '');
+          const code = document.createElement('code');
+          code.className = language ? 'language-' + language : '';
+          code.innerHTML = highlightCode(rawText, contentType);
+          pre.appendChild(code);
+          codeWrapper.appendChild(pre);
+
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'response-example-copy-btn';
+          copyBtn.textContent = 'Copy';
+          copyBtn.title = 'Copy to clipboard';
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(rawText).then(() => {
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+            });
+          });
+          codeWrapper.appendChild(copyBtn);
+
+          exampleBlock.appendChild(codeWrapper);
+          exampleWrapper.appendChild(exampleBlock);
+        }
+
+        // Handle multiple examples
+        if (media.examples && Object.keys(media.examples).length > 0) {
+          for (const [exampleName, exampleObj] of Object.entries(media.examples)) {
+            const exampleBlock = document.createElement('div');
+            exampleBlock.className = 'response-example-block';
+
+            const exampleHeader = document.createElement('div');
+            exampleHeader.className = 'response-example-header';
+            let headerHtml = `<span class="response-example-name">${escapeHtml(exampleName)}</span>`;
+            headerHtml += `<span class="response-example-content-type">${escapeHtml(contentType)}</span>`;
+            if (exampleObj.summary) {
+              headerHtml += `<span class="response-example-summary">${escapeHtml(exampleObj.summary)}</span>`;
+            }
+            exampleHeader.innerHTML = headerHtml;
+            exampleBlock.appendChild(exampleHeader);
+
+            if (exampleObj.description) {
+              const descDiv = document.createElement('div');
+              descDiv.className = 'response-example-description';
+              descDiv.textContent = exampleObj.description;
+              exampleBlock.appendChild(descDiv);
+            }
+
+            if (exampleObj.value !== undefined) {
+              const codeWrapper = document.createElement('div');
+              codeWrapper.className = 'response-example-code-wrapper';
+
+              const rawText = typeof exampleObj.value === 'string'
+                ? exampleObj.value
+                : JSON.stringify(exampleObj.value, null, 2);
+
+              const pre = document.createElement('pre');
+              pre.className = 'response-example-code' + (language ? ' language-' + language : '');
+              const code = document.createElement('code');
+              code.className = language ? 'language-' + language : '';
+              code.innerHTML = highlightCode(rawText, contentType);
+              pre.appendChild(code);
+              codeWrapper.appendChild(pre);
+
+              const copyBtn = document.createElement('button');
+              copyBtn.className = 'response-example-copy-btn';
+              copyBtn.textContent = 'Copy';
+              copyBtn.title = 'Copy to clipboard';
+              copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(rawText).then(() => {
+                  copyBtn.textContent = 'Copied!';
+                  setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+                });
+              });
+              codeWrapper.appendChild(copyBtn);
+
+              exampleBlock.appendChild(codeWrapper);
+            }
+
+            exampleWrapper.appendChild(exampleBlock);
+          }
+        }
+      }
+
+      exampleContent.appendChild(exampleWrapper);
+      container.appendChild(exampleContent);
+    }
+
     // Source tab content
     const sourceContent = document.createElement('div');
     sourceContent.className = 'response-tab-content';
@@ -1777,12 +1933,56 @@
 
     // Build the source object from the response (excluding internal fields)
     const sourceObj = S.buildResponseSourceObject(response);
+    const sourceJsonStr = JSON.stringify(sourceObj, null, 2);
 
+    // Create editor wrapper for JSON highlighting
+    const editorWrapper = document.createElement('div');
+    editorWrapper.className = 'response-source-editor-wrapper';
+
+    // Create highlighted code display (background layer)
+    const highlightPre = document.createElement('pre');
+    highlightPre.className = 'response-source-highlight';
+    const highlightCode = document.createElement('code');
+    highlightCode.className = 'language-json';
+    // Initial highlight
+    if (typeof Prism !== 'undefined' && Prism.languages.json) {
+      highlightCode.innerHTML = Prism.highlight(sourceJsonStr, Prism.languages.json, 'json');
+    } else {
+      highlightCode.textContent = sourceJsonStr;
+    }
+    highlightPre.appendChild(highlightCode);
+    editorWrapper.appendChild(highlightPre);
+
+    // Create textarea (foreground layer, transparent)
     const textarea = document.createElement('textarea');
     textarea.className = 'response-source-editor';
-    textarea.value = JSON.stringify(sourceObj, null, 2);
+    textarea.value = sourceJsonStr;
     textarea.spellcheck = false;
-    sourceWrapper.appendChild(textarea);
+
+    // Update highlight on input
+    const updateHighlight = () => {
+      if (typeof Prism !== 'undefined' && Prism.languages.json) {
+        try {
+          highlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.json, 'json');
+        } catch (e) {
+          // Ignore invalid JSON for highlighting
+          highlightCode.textContent = textarea.value;
+        }
+      } else {
+        highlightCode.textContent = textarea.value;
+      }
+    };
+
+    textarea.addEventListener('input', updateHighlight);
+
+    // Sync scroll positions
+    textarea.addEventListener('scroll', () => {
+      highlightPre.scrollTop = textarea.scrollTop;
+      highlightPre.scrollLeft = textarea.scrollLeft;
+    });
+
+    editorWrapper.appendChild(textarea);
+    sourceWrapper.appendChild(editorWrapper);
 
     const sourceActions = document.createElement('div');
     sourceActions.className = 'response-source-actions';
@@ -1800,7 +2000,8 @@
     container.appendChild(sourceContent);
 
     // Tab switching logic
-    [visualTab, sourceTab].forEach(btn => {
+    const allTabs = [visualTab, exampleTab, sourceTab].filter(Boolean);
+    allTabs.forEach(btn => {
       btn.addEventListener('click', () => {
         container.querySelectorAll('.response-tab-btn').forEach(b => b.classList.remove('active'));
         container.querySelectorAll('.response-tab-content').forEach(c => c.classList.remove('active'));
@@ -1851,6 +2052,12 @@
 
   // Build a clean source object from the response for editing
   S.buildResponseSourceObject = function(response) {
+    // Use the original source if available
+    if (response._source) {
+      return response._source;
+    }
+
+    // Fallback: construct from available fields
     const sourceObj = {};
 
     if (response.description) {

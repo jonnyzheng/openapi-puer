@@ -105,6 +105,7 @@ export interface ApiResponse {
   description?: string;
   content?: Record<string, MediaTypeObject>;
   headers?: Record<string, ApiParameter>;
+  _source?: Record<string, unknown>; // Original raw response object from the file
 }
 
 export interface Environment {

@@ -3677,6 +3677,202 @@ td.no-params-message {
   justify-content: flex-end;
 }
 
+/* Response Source Editor with Syntax Highlighting */
+.response-source-editor-wrapper {
+  position: relative;
+  min-height: 200px;
+  max-height: 400px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+
+.response-source-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 12px;
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  pointer-events: none;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+}
+
+.response-source-highlight code {
+  font-family: inherit;
+  background: transparent;
+}
+
+.response-source-editor-wrapper .response-source-editor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  max-height: 400px;
+  margin: 0;
+  padding: 12px;
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  resize: none;
+  border: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--vscode-editor-foreground);
+  outline: none;
+}
+
+.response-source-editor-wrapper .response-source-editor::selection {
+  background: var(--vscode-editor-selectionBackground, rgba(38, 79, 120, 0.5));
+}
+
+.response-source-editor-wrapper:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* Prism.js overrides for response source editor */
+.response-source-highlight .token.property { color: #9cdcfe; }
+.response-source-highlight .token.string { color: #ce9178; }
+.response-source-highlight .token.number { color: #b5cea8; }
+.response-source-highlight .token.boolean { color: #569cd6; }
+.response-source-highlight .token.null { color: #569cd6; }
+.response-source-highlight .token.punctuation { color: var(--vscode-foreground); }
+.response-source-highlight .token.operator { color: var(--vscode-foreground); }
+
+/* Response Example Tab Styles */
+.response-example-wrapper {
+  padding: 12px;
+}
+
+.response-example-block {
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.response-example-block:last-child {
+  margin-bottom: 0;
+}
+
+.response-example-header {
+  background: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  border-radius: 6px 6px 0 0;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.response-example-name {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  font-size: 13px;
+}
+
+.response-example-content-type {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-badge-background);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.response-example-summary {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.response-example-description {
+  padding: 8px 12px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.response-example-code-wrapper {
+  position: relative;
+}
+
+.response-example-code {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  border-radius: 0 0 6px 6px;
+  overflow-x: auto;
+  max-height: 400px;
+  white-space: pre;
+}
+
+.response-example-code code {
+  font-family: inherit;
+  color: inherit;
+}
+
+.response-example-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.response-example-code-wrapper:hover .response-example-copy-btn {
+  opacity: 1;
+}
+
+.response-example-copy-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Prism.js overrides for response example code */
+.response-example-code code[class*="language-"],
+.response-example-code pre[class*="language-"] {
+  background: transparent;
+  text-shadow: none;
+  margin: 0;
+  padding: 0;
+}
+
+.response-example-code .token.property { color: #9cdcfe; }
+.response-example-code .token.string { color: #ce9178; }
+.response-example-code .token.number { color: #b5cea8; }
+.response-example-code .token.boolean { color: #569cd6; }
+.response-example-code .token.null { color: #569cd6; }
+.response-example-code .token.punctuation { color: var(--vscode-foreground); }
+.response-example-code .token.operator { color: var(--vscode-foreground); }
+.response-example-code .token.tag { color: #569cd6; }
+.response-example-code .token.attr-name { color: #9cdcfe; }
+.response-example-code .token.attr-value { color: #ce9178; }
+.response-example-code .token.keyword { color: #569cd6; }
+.response-example-code .token.comment { color: #6a9955; }
+
 .text-muted {
   color: var(--vscode-descriptionForeground);
   font-style: italic;

@@ -403,7 +403,8 @@ export class OpenApiService {
 
       const apiResponse: ApiResponse = {
         statusCode,
-        description: resolved.description
+        description: resolved.description,
+        _source: JSON.parse(JSON.stringify(resolved)) // Store original source
       };
 
       // OpenAPI 3.x
