@@ -237,6 +237,21 @@
           "command": "openapi-puer.openInNewTab",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "0_open@1"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "0_open@1"
         }
       ]
     },

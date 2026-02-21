@@ -955,6 +955,42 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  panel.onAddComponentParameter(async (data) => {
+    const result = await openApiService.addComponentParameter(data.filePath, data.paramKey, data.parameter);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  panel.onDeleteComponentParameter(async (data) => {
+    const result = await openApiService.deleteComponentParameter(data.filePath, data.paramKey);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
+  panel.onUpdateComponentParameter(async (data) => {
+    const result = await openApiService.updateComponentParameter(data.filePath, data.paramKey, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
   // Reset flag when panel is disposed
   panel.onDispose(() => {
     panelHandlersRegistered = false;
@@ -1183,6 +1219,36 @@ function setupNewTabHandlers(panel: ApiPanel): void {
     if (result.success) {
       panel.updateServers(result.servers || []);
       await refreshApiFiles();
+    }
+  });
+
+  panel.onAddComponentParameter(async (data) => {
+    const result = await openApiService.addComponentParameter(data.filePath, data.paramKey, data.parameter);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onDeleteComponentParameter(async (data) => {
+    const result = await openApiService.deleteComponentParameter(data.filePath, data.paramKey);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onUpdateComponentParameter(async (data) => {
+    const result = await openApiService.updateComponentParameter(data.filePath, data.paramKey, data.updates);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
     }
   });
 }

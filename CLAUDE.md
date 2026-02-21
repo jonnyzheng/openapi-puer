@@ -71,5 +71,5 @@ Press `F5` in VS Code to launch the Extension Development Host.
 ## UI Rules
 
 - When an inline edit input replaces a text label in a table cell, the input height must match the original text label height. Use consistent `height`, `line-height`, `padding`, and `box-sizing` between `.editable-cell` and its `.inline-edit-input` so there is no layout shift on focus.
-- MUST use custom confirmation dialog , don't use the default browser `confirm()` function.
-- MUST use PrismJS for syntax highlighting in the webview, and follow the existing code styling in the current version of OpenAPI Puer.
+- *MUST* use custom confirmation dialog , don't use the default browser `confirm()` function.
+- *MUST* use PrismJS for syntax highlighting in the webview, and follow the existing code styling in the current version of OpenAPI Puer.

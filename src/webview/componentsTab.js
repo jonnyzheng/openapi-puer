@@ -119,19 +119,35 @@
     S.currentComponents = payload.components;
     S.currentFilePath = payload.filePath;
 
-    container.innerHTML = `
-      <div id="header">
-        <div id="endpoint-info">
-          <span class="method-badge schema-badge">SCHEMA</span>
-          <span id="endpoint-path">${escapeHtml(payload.title || 'Schemas')}</span>
+    var hasSchemas = payload.components && payload.components.schemas && Object.keys(payload.components.schemas).length > 0;
+    var hasParameters = payload.components && payload.components.parameters && Object.keys(payload.components.parameters).length > 0;
+    var isParameterOnly = hasParameters && !hasSchemas;
+
+    // Build tabs HTML
+    var tabsHtml = '';
+    var contentHtml = '';
+
+    if (isParameterOnly) {
+      // Parameter-only file: show only Parameters tab
+      tabsHtml = '<button class="main-tab-btn active" data-main-tab="comp-parameters">Parameters</button>';
+      contentHtml = `
+        <div id="comp-parameters-tab" class="main-tab-content active">
+          <div id="endpoint-details">
+            <div class="section-header-with-action" style="margin-bottom: 16px;">
+              <h3 class="section-header">Parameters</h3>
+              <button class="add-server-btn" id="add-comp-param-btn">+ Add Parameter</button>
+            </div>
+            <div id="comp-params-editable-content"></div>
+          </div>
         </div>
-      </div>
-
-      <div id="main-tabs">
-        <button class="main-tab-btn active" data-main-tab="components">Schemas</button>
-      </div>
-
-      <div id="content">
+      `;
+    } else {
+      // Schema file (may also have parameters): show both tabs
+      tabsHtml = '<button class="main-tab-btn active" data-main-tab="components">Schemas</button>';
+      if (hasParameters) {
+        tabsHtml += '<button class="main-tab-btn" data-main-tab="comp-parameters">Parameters</button>';
+      }
+      contentHtml = `
         <div id="components-tab" class="main-tab-content active">
           <div id="endpoint-details">
             <div class="section-header-with-action" style="margin-bottom: 16px;">
@@ -141,14 +157,68 @@
             <div id="schemas-editable-content"></div>
           </div>
         </div>
+      `;
+      if (hasParameters) {
+        contentHtml += `
+          <div id="comp-parameters-tab" class="main-tab-content">
+            <div id="endpoint-details">
+              <div class="section-header-with-action" style="margin-bottom: 16px;">
+                <h3 class="section-header">Parameters</h3>
+                <button class="add-server-btn" id="add-comp-param-btn">+ Add Parameter</button>
+              </div>
+              <div id="comp-params-editable-content"></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    var badgeLabel = isParameterOnly ? 'PARAMS' : 'SCHEMA';
+
+    container.innerHTML = `
+      <div id="header">
+        <div id="endpoint-info">
+          <span class="method-badge schema-badge">${badgeLabel}</span>
+          <span id="endpoint-path">${escapeHtml(payload.title || 'Schemas')}</span>
+        </div>
+      </div>
+
+      <div id="main-tabs">
+        ${tabsHtml}
+      </div>
+
+      <div id="content">
+        ${contentHtml}
       </div>
     `;
 
-    document.getElementById('add-schema-btn').addEventListener('click', function() {
-      S.showSchemaDialog();
+    var addSchemaBtn = document.getElementById('add-schema-btn');
+    if (addSchemaBtn) {
+      addSchemaBtn.addEventListener('click', function() {
+        S.showSchemaDialog();
+      });
+    }
+
+    var addParamBtn = document.getElementById('add-comp-param-btn');
+    if (addParamBtn) {
+      addParamBtn.addEventListener('click', function() {
+        S.showComponentParameterDialog();
+      });
+    }
+
+    // Wire tab switching
+    document.querySelectorAll('.main-tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        S.switchMainTab(btn.dataset.mainTab);
+      });
     });
 
-    S.renderEditableSchemas();
+    if (!isParameterOnly) {
+      S.renderEditableSchemas();
+    }
+    if (hasParameters) {
+      S.renderEditableParameters();
+    }
   };
 
   S.showSchemaDialog = function() {
@@ -1385,5 +1455,582 @@
       card.appendChild(sourceContent);
       container.appendChild(card);
     });
+  };
+
+  // --- Component Parameters ---
+
+  var LOCATION_COLORS = {
+    path: 'param-location-path',
+    query: 'param-location-query',
+    header: 'param-location-header',
+    cookie: 'param-location-cookie'
+  };
+
+  S.renderEditableParameters = function() {
+    var escapeHtml = S.escapeHtml;
+    var container = document.getElementById('comp-params-editable-content');
+    if (!container || !S.currentComponents) return;
+
+    container.innerHTML = '';
+
+    var parameters = S.currentComponents.parameters || {};
+    var paramKeys = Object.keys(parameters);
+
+    if (paramKeys.length === 0) {
+      var emptyState = document.createElement('div');
+      emptyState.className = 'empty-state';
+      emptyState.innerHTML = '<p>No parameters defined</p><p class="empty-state-hint">Click "+ Add Parameter" to create one</p>';
+      container.appendChild(emptyState);
+      return;
+    }
+
+    // Group by location
+    var groups = { path: [], query: [], header: [], cookie: [] };
+    paramKeys.forEach(function(key) {
+      var param = parameters[key];
+      var loc = param._paramIn || 'query';
+      if (!groups[loc]) { groups[loc] = []; }
+      groups[loc].push({ key: key, param: param });
+    });
+
+    var locationOrder = ['path', 'query', 'header', 'cookie'];
+    locationOrder.forEach(function(loc) {
+      var items = groups[loc];
+      if (!items || items.length === 0) return;
+
+      var section = document.createElement('section');
+      section.className = 'section';
+
+      var sectionHeader = document.createElement('h3');
+      sectionHeader.className = 'section-header collapsible';
+      sectionHeader.textContent = loc.charAt(0).toUpperCase() + loc.slice(1) + ' Parameters (' + items.length + ')';
+
+      var sectionContent = document.createElement('div');
+      sectionContent.className = 'section-content';
+
+      sectionHeader.addEventListener('click', function() {
+        sectionHeader.classList.toggle('collapsed');
+        sectionContent.classList.toggle('hidden');
+      });
+
+      items.forEach(function(item) {
+        var card = createParameterCard(item.key, item.param, escapeHtml);
+        sectionContent.appendChild(card);
+      });
+
+      section.appendChild(sectionHeader);
+      section.appendChild(sectionContent);
+      container.appendChild(section);
+    });
+  };
+
+  function createParameterCard(paramKey, param, escapeHtml) {
+    var card = document.createElement('div');
+    card.className = 'component-card';
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'component-header';
+
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'component-name';
+    nameSpan.textContent = paramKey;
+
+    var locationBadge = document.createElement('span');
+    locationBadge.className = 'component-type ' + (LOCATION_COLORS[param._paramIn] || '');
+    locationBadge.textContent = param._paramIn || 'query';
+
+    var typeBadge = document.createElement('span');
+    typeBadge.className = 'component-type';
+    typeBadge.textContent = param.type || 'string';
+
+    var headerActions = document.createElement('div');
+    headerActions.className = 'schema-header-actions';
+
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'schema-action-btn delete';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.title = 'Delete parameter';
+    deleteBtn.addEventListener('click', function() {
+      S.showConfirmDialog('Are you sure you want to delete parameter <code>' + escapeHtml(paramKey) + '</code>?', function() {
+        S.vscode.postMessage({
+          type: 'deleteComponentParameter',
+          payload: { filePath: S.currentFilePath, paramKey: paramKey }
+        });
+      });
+    });
+
+    headerActions.appendChild(deleteBtn);
+    header.appendChild(nameSpan);
+    header.appendChild(locationBadge);
+    header.appendChild(typeBadge);
+    header.appendChild(headerActions);
+    card.appendChild(header);
+
+    // Card tabs (Visual / Source)
+    var tabBar = document.createElement('div');
+    tabBar.className = 'schema-card-tabs';
+
+    var visualTabBtn = document.createElement('button');
+    visualTabBtn.className = 'schema-card-tab-btn active';
+    visualTabBtn.textContent = 'Visual';
+
+    var sourceTabBtn = document.createElement('button');
+    sourceTabBtn.className = 'schema-card-tab-btn';
+    sourceTabBtn.textContent = 'Source';
+
+    tabBar.appendChild(visualTabBtn);
+    tabBar.appendChild(sourceTabBtn);
+    card.appendChild(tabBar);
+
+    // Visual tab content
+    var visualContent = document.createElement('div');
+    visualContent.className = 'schema-card-tab-content active';
+
+    var table = document.createElement('table');
+    table.className = 'param-detail-table';
+
+    var tbody = document.createElement('tbody');
+
+    // Helper: create editable row
+    function addRow(label, value, field, inputType) {
+      var tr = document.createElement('tr');
+
+      var labelTd = document.createElement('td');
+      labelTd.innerHTML = '<strong>' + escapeHtml(label) + '</strong>';
+
+      var valueTd = document.createElement('td');
+      valueTd.className = 'editable-cell';
+
+      if (inputType === 'toggle') {
+        var switchLabel = document.createElement('label');
+        switchLabel.className = 'switch-toggle';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!value;
+        cb.addEventListener('change', function() {
+          var updates = {};
+          updates[field] = cb.checked ? true : null;
+          S.vscode.postMessage({
+            type: 'updateComponentParameter',
+            payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
+          });
+        });
+        var slider = document.createElement('span');
+        slider.className = 'switch-slider';
+        switchLabel.appendChild(cb);
+        switchLabel.appendChild(slider);
+        valueTd.appendChild(switchLabel);
+      } else if (inputType === 'select') {
+        var span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        span.textContent = value || '—';
+        valueTd.appendChild(span);
+        valueTd.addEventListener('click', function() {
+          if (valueTd.querySelector('select')) return;
+          var select = document.createElement('select');
+          select.className = 'inline-edit-select';
+          var options = [];
+          if (field === 'in') {
+            options = ['path', 'query', 'header', 'cookie'];
+          } else if (field === 'type') {
+            options = ['string', 'integer', 'number', 'boolean', 'array'];
+          }
+          options.forEach(function(opt) {
+            var option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            if (opt === value) option.selected = true;
+            select.appendChild(option);
+          });
+          valueTd.innerHTML = '';
+          valueTd.appendChild(select);
+          select.focus();
+
+          function save() {
+            var newVal = select.value;
+            if (newVal !== value) {
+              var updates = {};
+              updates[field] = newVal;
+              S.vscode.postMessage({
+                type: 'updateComponentParameter',
+                payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
+              });
+            }
+            span.textContent = newVal || '—';
+            valueTd.innerHTML = '';
+            valueTd.appendChild(span);
+          }
+          select.addEventListener('blur', save);
+          select.addEventListener('change', save);
+        });
+      } else {
+        var span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        span.textContent = value !== undefined && value !== null && value !== '' ? String(value) : '—';
+        valueTd.appendChild(span);
+        valueTd.addEventListener('click', function() {
+          if (valueTd.querySelector('input')) return;
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'inline-edit-input';
+          input.value = value !== undefined && value !== null ? String(value) : '';
+          valueTd.innerHTML = '';
+          valueTd.appendChild(input);
+          input.focus();
+          input.select();
+
+          function save() {
+            var newVal = input.value.trim();
+            if (newVal !== (value !== undefined && value !== null ? String(value) : '')) {
+              var updates = {};
+              if (field === 'example') {
+                try { updates[field] = JSON.parse(newVal); } catch(e) { updates[field] = newVal || null; }
+              } else {
+                updates[field] = newVal || null;
+              }
+              S.vscode.postMessage({
+                type: 'updateComponentParameter',
+                payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
+              });
+            }
+            span.textContent = newVal || '—';
+            valueTd.innerHTML = '';
+            valueTd.appendChild(span);
+          }
+          input.addEventListener('blur', save);
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); save(); }
+            else if (e.key === 'Escape') {
+              valueTd.innerHTML = '';
+              valueTd.appendChild(span);
+            }
+          });
+        });
+      }
+
+      tr.appendChild(labelTd);
+      tr.appendChild(valueTd);
+      tbody.appendChild(tr);
+    }
+
+    addRow('Name', param._paramName || '', 'name', 'text');
+    addRow('Location', param._paramIn || 'query', 'in', 'select');
+    addRow('Type', param.type || 'string', 'type', 'select');
+    addRow('Required', param._paramRequired, 'required', 'toggle');
+    addRow('Description', param.description || '', 'description', 'text');
+    addRow('Deprecated', param.deprecated, 'deprecated', 'toggle');
+    addRow('Example', param.example !== undefined ? (typeof param.example === 'object' ? JSON.stringify(param.example) : String(param.example)) : '', 'example', 'text');
+
+    // Show schema constraints summary if any
+    var othersItems = S.collectOthersFields(param);
+    // Filter out fields already shown above
+    var extraItems = othersItems.filter(function(item) {
+      return ['format', 'enum', 'default', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum',
+              'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'uniqueItems', 'nullable'].indexOf(item.key) !== -1;
+    });
+    if (extraItems.length > 0) {
+      var constraintsTr = document.createElement('tr');
+      var constraintsLabelTd = document.createElement('td');
+      constraintsLabelTd.innerHTML = '<strong>Constraints</strong>';
+      var constraintsValueTd = document.createElement('td');
+      constraintsValueTd.className = 'constraints-summary';
+      constraintsValueTd.textContent = extraItems.map(function(item) { return item.key + ': ' + item.value; }).join(', ');
+      constraintsTr.appendChild(constraintsLabelTd);
+      constraintsTr.appendChild(constraintsValueTd);
+      tbody.appendChild(constraintsTr);
+    }
+
+    table.appendChild(tbody);
+    visualContent.appendChild(table);
+
+    // Source tab content
+    var sourceContent = document.createElement('div');
+    sourceContent.className = 'schema-card-tab-content';
+
+    var sourceWrapper = document.createElement('div');
+    sourceWrapper.className = 'schema-source-wrapper';
+
+    var sourcePre = document.createElement('pre');
+    sourcePre.className = 'schema-source-pre';
+    var sourceCode = document.createElement('code');
+    sourceCode.className = 'schema-source-code';
+
+    // Build the OpenAPI representation for source view
+    var sourceObj = buildParameterSourceObj(param);
+    sourceCode.innerHTML = S.highlightJson(JSON.stringify(sourceObj, null, 2));
+    sourcePre.appendChild(sourceCode);
+    sourceWrapper.appendChild(sourcePre);
+    sourceContent.appendChild(sourceWrapper);
+
+    // Tab switching
+    (function(visBtn, srcBtn, visCont, srcCont, pKey, codeEl) {
+      visBtn.addEventListener('click', function() {
+        visBtn.classList.add('active');
+        srcBtn.classList.remove('active');
+        visCont.classList.add('active');
+        srcCont.classList.remove('active');
+      });
+      srcBtn.addEventListener('click', function() {
+        srcBtn.classList.add('active');
+        visBtn.classList.remove('active');
+        srcCont.classList.add('active');
+        visCont.classList.remove('active');
+        // Refresh source
+        var currentParam = (S.currentComponents.parameters || {})[pKey];
+        if (currentParam) {
+          codeEl.innerHTML = S.highlightJson(JSON.stringify(buildParameterSourceObj(currentParam), null, 2));
+        }
+      });
+    })(visualTabBtn, sourceTabBtn, visualContent, sourceContent, paramKey, sourceCode);
+
+    card.appendChild(visualContent);
+    card.appendChild(sourceContent);
+
+    return card;
+  }
+
+  function buildParameterSourceObj(param) {
+    var obj = {};
+    if (param._paramName) obj.name = param._paramName;
+    if (param._paramIn) obj.in = param._paramIn;
+    if (param.description) obj.description = param.description;
+    if (param._paramRequired) obj.required = true;
+    if (param.deprecated) obj.deprecated = true;
+    if (param.example !== undefined) obj.example = param.example;
+    var schema = {};
+    if (param.type) schema.type = param.type;
+    if (param.format) schema.format = param.format;
+    if (param.enum) schema.enum = param.enum;
+    if (param.default !== undefined) schema.default = param.default;
+    if (param.pattern) schema.pattern = param.pattern;
+    if (param.minimum !== undefined) schema.minimum = param.minimum;
+    if (param.maximum !== undefined) schema.maximum = param.maximum;
+    if (param.minLength !== undefined) schema.minLength = param.minLength;
+    if (param.maxLength !== undefined) schema.maxLength = param.maxLength;
+    if (Object.keys(schema).length > 0) obj.schema = schema;
+    return obj;
+  }
+
+  S.showComponentParameterDialog = function() {
+    var existingDialog = document.querySelector('.server-dialog-overlay');
+    if (existingDialog) existingDialog.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'server-dialog-overlay';
+
+    var dialog = document.createElement('div');
+    dialog.className = 'server-dialog';
+
+    var title = document.createElement('h3');
+    title.textContent = 'Add Parameter';
+
+    var form = document.createElement('div');
+    form.className = 'server-form';
+
+    // Key field
+    var keyLabel = document.createElement('label');
+    keyLabel.textContent = 'Key *';
+    var keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'server-input';
+    keyInput.placeholder = 'e.g., limitParam';
+
+    // Name field
+    var nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Name *';
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'server-input';
+    nameInput.placeholder = 'e.g., limit';
+
+    // Location field
+    var locLabel = document.createElement('label');
+    locLabel.textContent = 'Location *';
+    var locSelect = document.createElement('select');
+    locSelect.className = 'server-input';
+    ['query', 'header', 'path', 'cookie'].forEach(function(loc) {
+      var opt = document.createElement('option');
+      opt.value = loc;
+      opt.textContent = loc;
+      locSelect.appendChild(opt);
+    });
+
+    // Type field
+    var typeLabel = document.createElement('label');
+    typeLabel.textContent = 'Type';
+    var typeSelect = document.createElement('select');
+    typeSelect.className = 'server-input';
+    ['string', 'integer', 'number', 'boolean', 'array'].forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      typeSelect.appendChild(opt);
+    });
+
+    // Required field
+    var reqLabel = document.createElement('label');
+    reqLabel.className = 'schema-checkbox-label';
+    var reqCheckbox = document.createElement('input');
+    reqCheckbox.type = 'checkbox';
+    reqLabel.appendChild(reqCheckbox);
+    reqLabel.appendChild(document.createTextNode(' Required'));
+
+    // Description field
+    var descLabel = document.createElement('label');
+    descLabel.textContent = 'Description';
+    var descInput = document.createElement('input');
+    descInput.type = 'text';
+    descInput.className = 'server-input';
+    descInput.placeholder = 'Parameter description';
+
+    form.appendChild(keyLabel);
+    form.appendChild(keyInput);
+    form.appendChild(nameLabel);
+    form.appendChild(nameInput);
+    form.appendChild(locLabel);
+    form.appendChild(locSelect);
+    form.appendChild(typeLabel);
+    form.appendChild(typeSelect);
+    form.appendChild(reqLabel);
+    form.appendChild(descLabel);
+    form.appendChild(descInput);
+
+    // Advanced section
+    var advToggle = document.createElement('div');
+    advToggle.className = 'advanced-toggle';
+    advToggle.textContent = '▶ Advanced';
+    advToggle.style.cursor = 'pointer';
+    advToggle.style.fontSize = '12px';
+    advToggle.style.color = 'var(--vscode-textLink-foreground)';
+    advToggle.style.marginTop = '8px';
+    advToggle.style.userSelect = 'none';
+
+    var advContent = document.createElement('div');
+    advContent.style.display = 'none';
+    advContent.style.marginTop = '8px';
+
+    advToggle.addEventListener('click', function() {
+      if (advContent.style.display === 'none') {
+        advContent.style.display = 'block';
+        advToggle.textContent = '▼ Advanced';
+      } else {
+        advContent.style.display = 'none';
+        advToggle.textContent = '▶ Advanced';
+      }
+    });
+
+    // Example
+    var advExampleLabel = document.createElement('label');
+    advExampleLabel.textContent = 'Example';
+    var advExampleInput = document.createElement('input');
+    advExampleInput.type = 'text';
+    advExampleInput.className = 'server-input';
+    advExampleInput.placeholder = 'Example value';
+
+    // Deprecated
+    var advDeprecatedLbl = document.createElement('label');
+    advDeprecatedLbl.className = 'schema-checkbox-label';
+    var advDeprecatedCb = document.createElement('input');
+    advDeprecatedCb.type = 'checkbox';
+    advDeprecatedLbl.appendChild(advDeprecatedCb);
+    advDeprecatedLbl.appendChild(document.createTextNode(' Deprecated'));
+
+    // Format
+    var advFormatLabel = document.createElement('label');
+    advFormatLabel.textContent = 'Format';
+    var advFormatSelect = document.createElement('select');
+    advFormatSelect.className = 'server-input';
+    var updateFormatOptions = function() {
+      var formatOptions = { string: ['', 'date', 'date-time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary', 'password'], integer: ['', 'int32', 'int64'], number: ['', 'float', 'double'] };
+      var opts = formatOptions[typeSelect.value] || [''];
+      advFormatSelect.innerHTML = '';
+      opts.forEach(function(f) {
+        var opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f || '(none)';
+        advFormatSelect.appendChild(opt);
+      });
+    };
+    updateFormatOptions();
+    typeSelect.addEventListener('change', updateFormatOptions);
+
+    // Enum
+    var advEnumLabel = document.createElement('label');
+    advEnumLabel.textContent = 'Enum (comma-separated)';
+    var advEnumInput = document.createElement('input');
+    advEnumInput.type = 'text';
+    advEnumInput.className = 'server-input';
+    advEnumInput.placeholder = 'e.g. active, inactive, pending';
+
+    advContent.appendChild(advExampleLabel);
+    advContent.appendChild(advExampleInput);
+    advContent.appendChild(advDeprecatedLbl);
+    advContent.appendChild(advFormatLabel);
+    advContent.appendChild(advFormatSelect);
+    advContent.appendChild(advEnumLabel);
+    advContent.appendChild(advEnumInput);
+
+    form.appendChild(advToggle);
+    form.appendChild(advContent);
+
+    // Buttons
+    var buttons = document.createElement('div');
+    buttons.className = 'server-dialog-buttons';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'server-dialog-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { overlay.remove(); });
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'server-dialog-save';
+    saveBtn.textContent = 'Add';
+    saveBtn.addEventListener('click', function() {
+      var key = keyInput.value.trim();
+      var name = nameInput.value.trim();
+      if (!key) { keyInput.classList.add('error'); return; }
+      if (!name) { nameInput.classList.add('error'); return; }
+
+      var parameter = {
+        name: name,
+        in: locSelect.value,
+        type: typeSelect.value,
+        required: reqCheckbox.checked || undefined,
+        description: descInput.value.trim() || undefined,
+      };
+
+      // Advanced fields
+      var exVal = advExampleInput.value.trim();
+      if (exVal) {
+        try { parameter.example = JSON.parse(exVal); } catch(e) { parameter.example = exVal; }
+      }
+      if (advDeprecatedCb.checked) { parameter.deprecated = true; }
+      var fmtVal = advFormatSelect.value;
+      if (fmtVal) { parameter.format = fmtVal; }
+
+      S.vscode.postMessage({
+        type: 'addComponentParameter',
+        payload: { filePath: S.currentFilePath, paramKey: key, parameter: parameter }
+      });
+      overlay.remove();
+    });
+
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(saveBtn);
+    dialog.appendChild(title);
+    dialog.appendChild(form);
+    dialog.appendChild(buttons);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    keyInput.focus();
+
+    var handleKeydown = function(e) {
+      if (e.key === 'Enter') saveBtn.click();
+      else if (e.key === 'Escape') overlay.remove();
+    };
+    keyInput.addEventListener('keydown', handleKeydown);
+    nameInput.addEventListener('keydown', handleKeydown);
+    descInput.addEventListener('keydown', handleKeydown);
   };
 })();

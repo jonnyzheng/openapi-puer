@@ -98,6 +98,10 @@ export interface SchemaObject {
     mapping?: Record<string, string>;
   };
   _mergedFrom?: string[];  // Track allOf merge sources for UI display
+  // Component parameter metadata (prefixed with _ to indicate internal use)
+  _paramIn?: 'path' | 'query' | 'header' | 'cookie';
+  _paramRequired?: boolean;
+  _paramName?: string;
 }
 
 export interface ApiResponse {

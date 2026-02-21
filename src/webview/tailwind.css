@@ -1859,6 +1859,65 @@ pre[class*="language-"] {
   text-decoration: underline;
 }
 
+/* Parameter detail key-value table */
+.param-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.param-detail-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  vertical-align: middle;
+}
+
+.param-detail-table tr:last-child td,
+.param-detail-table tr:last-child td.editable-cell {
+  border-bottom: none;
+}
+
+.param-detail-table td:first-child {
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.param-detail-table td:last-child {
+  width: auto;
+}
+
+.param-detail-table td.editable-cell {
+  display: table-cell;
+  cursor: pointer;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 6px 12px;
+  min-width: 0;
+  transition: background-color 0.15s;
+}
+
+.param-detail-table td.editable-cell:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.param-detail-table .editable-cell-value {
+  display: inline-block;
+  padding: 2px 4px;
+  min-height: 20px;
+  line-height: 1.4;
+}
+
+.param-detail-table .constraints-summary {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-style: italic;
+}
+
 /* Others column styles */
 .others-cell {
   cursor: pointer;

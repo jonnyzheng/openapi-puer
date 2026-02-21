@@ -213,15 +213,20 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
     for (const file of sortedFiles) {
       const isApiJson = file.fileName.toLowerCase() === 'api.json';
-      const isSchemaFile = !isApiJson && file.endpoints.length === 0 && !!file.components;
+      const isComponentFile = !isApiJson && file.endpoints.length === 0 && !!file.components;
+      const hasSchemas = isComponentFile && !!file.components?.schemas && Object.keys(file.components.schemas).length > 0;
+      const hasParameters = isComponentFile && !!file.components?.parameters && Object.keys(file.components.parameters).length > 0;
+      const isParameterOnlyFile = isComponentFile && !hasSchemas && hasParameters;
       const item = new ApiTreeItem(
         file.title || file.fileName,
-        (isApiJson || isSchemaFile) ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
+        (isApiJson || isComponentFile) ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
         'file',
         file
       );
       item.tooltip = file.description || file.filePath;
-      item.iconPath = new vscode.ThemeIcon(isSchemaFile ? 'symbol-class' : 'file-code');
+      item.iconPath = new vscode.ThemeIcon(
+        isParameterOnlyFile ? 'symbol-parameter' : isComponentFile ? 'symbol-class' : 'file-code'
+      );
       item.resourceUri = vscode.Uri.file(file.filePath);
       // Set special contextValue for api.json files
       if (isApiJson) {
@@ -231,8 +236,8 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
           title: 'Open API File',
           arguments: [file]
         };
-      } else if (isSchemaFile) {
-        item.contextValue = 'file-schema';
+      } else if (isComponentFile) {
+        item.contextValue = isParameterOnlyFile ? 'file-parameter' : 'file-schema';
         item.command = {
           command: 'openapi-puer.openSchemaFile',
           title: 'Open Schema File',

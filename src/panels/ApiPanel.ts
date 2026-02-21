@@ -232,6 +232,26 @@ export class ApiPanel {
   }>();
   readonly onUpdateFullSchema = this.onUpdateFullSchemaEmitter.event;
 
+  private onAddComponentParameterEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    paramKey: string;
+    parameter: { name: string; in: string; type: string; required?: boolean; description?: string; example?: unknown; deprecated?: boolean; format?: string };
+  }>();
+  readonly onAddComponentParameter = this.onAddComponentParameterEmitter.event;
+
+  private onDeleteComponentParameterEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    paramKey: string;
+  }>();
+  readonly onDeleteComponentParameter = this.onDeleteComponentParameterEmitter.event;
+
+  private onUpdateComponentParameterEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    paramKey: string;
+    updates: Record<string, unknown>;
+  }>();
+  readonly onUpdateComponentParameter = this.onUpdateComponentParameterEmitter.event;
+
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -606,6 +626,26 @@ export class ApiPanel {
           filePath: string;
           schemaName: string;
           schema: Record<string, unknown>;
+        });
+        break;
+      case 'addComponentParameter':
+        this.onAddComponentParameterEmitter.fire(message.payload as {
+          filePath: string;
+          paramKey: string;
+          parameter: { name: string; in: string; type: string; required?: boolean; description?: string; example?: unknown; deprecated?: boolean; format?: string };
+        });
+        break;
+      case 'deleteComponentParameter':
+        this.onDeleteComponentParameterEmitter.fire(message.payload as {
+          filePath: string;
+          paramKey: string;
+        });
+        break;
+      case 'updateComponentParameter':
+        this.onUpdateComponentParameterEmitter.fire(message.payload as {
+          filePath: string;
+          paramKey: string;
+          updates: Record<string, unknown>;
         });
         break;
       case 'ready':

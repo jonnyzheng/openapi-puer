@@ -107,11 +107,37 @@ export class OpenApiService {
 
   private parseSchemaFile(filePath: string, parsed: Record<string, unknown>, mtimeMs: number): ApiFile {
     const components = parsed.components as Record<string, Record<string, unknown>>;
-    const schemas: Record<string, SchemaObject> = {};
+    const result: Record<string, Record<string, SchemaObject>> = {};
 
     if (components.schemas) {
+      result.schemas = {};
       for (const [name, schema] of Object.entries(components.schemas)) {
-        schemas[name] = this.extractSchemaFromRaw(schema as Record<string, unknown>);
+        result.schemas[name] = this.extractSchemaFromRaw(schema as Record<string, unknown>);
+      }
+    }
+
+    if (components.parameters) {
+      result.parameters = {};
+      for (const [name, param] of Object.entries(components.parameters)) {
+        const paramObj = param as Record<string, unknown>;
+        const schemaObj = paramObj.schema as Record<string, unknown> | undefined;
+        result.parameters[name] = {
+          type: schemaObj?.type as string || 'string',
+          format: schemaObj?.format as string | undefined,
+          description: paramObj.description as string | undefined,
+          example: paramObj.example,
+          deprecated: paramObj.deprecated as boolean | undefined,
+          enum: schemaObj?.enum as unknown[] | undefined,
+          default: schemaObj?.default,
+          pattern: schemaObj?.pattern as string | undefined,
+          minimum: schemaObj?.minimum as number | undefined,
+          maximum: schemaObj?.maximum as number | undefined,
+          minLength: schemaObj?.minLength as number | undefined,
+          maxLength: schemaObj?.maxLength as number | undefined,
+          _paramIn: paramObj.in as 'path' | 'query' | 'header' | 'cookie',
+          _paramRequired: paramObj.required as boolean | undefined,
+          _paramName: paramObj.name as string | undefined,
+        } as SchemaObject;
       }
     }
 
@@ -124,7 +150,7 @@ export class OpenApiService {
       description: undefined,
       servers: [],
       endpoints: [],
-      components: { schemas }
+      components: result
     };
 
     this.cache.set(filePath, { mtime: mtimeMs, apiFile });
@@ -876,7 +902,7 @@ export class OpenApiService {
     const spec = obj as Record<string, unknown>;
     if ('swagger' in spec || 'openapi' in spec) return false;
     const components = spec.components as Record<string, unknown> | undefined;
-    return !!(components && typeof components === 'object' && components.schemas);
+    return !!(components && typeof components === 'object' && (components.schemas || components.parameters));
   }
 
   private getSpecVersion(spec: OpenAPI.Document): '2.0' | '3.0' | '3.1' {
@@ -944,9 +970,23 @@ export class OpenApiService {
         for (const [name, param] of Object.entries(v3Spec.components.parameters)) {
           const resolved = this.resolveRef(param, spec) as OpenAPIV3.ParameterObject;
           if (resolved) {
+            const schemaObj = resolved.schema as OpenAPIV3.SchemaObject | undefined;
             result.parameters[name] = {
-              type: resolved.schema ? (resolved.schema as OpenAPIV3.SchemaObject).type : 'string',
-              description: resolved.description
+              type: schemaObj?.type || 'string',
+              format: schemaObj?.format,
+              description: resolved.description,
+              example: resolved.example,
+              deprecated: resolved.deprecated,
+              enum: schemaObj?.enum as unknown[],
+              default: schemaObj?.default,
+              pattern: schemaObj?.pattern,
+              minimum: schemaObj?.minimum,
+              maximum: schemaObj?.maximum,
+              minLength: schemaObj?.minLength,
+              maxLength: schemaObj?.maxLength,
+              _paramIn: resolved.in as 'path' | 'query' | 'header' | 'cookie',
+              _paramRequired: resolved.required,
+              _paramName: resolved.name,
             } as SchemaObject;
           }
         }
@@ -2052,6 +2092,159 @@ export class OpenApiService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Error updating full schema: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async addComponentParameter(
+    filePath: string,
+    paramKey: string,
+    parameter: {
+      name: string;
+      in: string;
+      type: string;
+      required?: boolean;
+      description?: string;
+      example?: unknown;
+      deprecated?: boolean;
+      format?: string;
+    }
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      if (!spec.components) {
+        spec.components = {};
+      }
+      if (!spec.components.parameters) {
+        spec.components.parameters = {};
+      }
+
+      if (spec.components.parameters[paramKey]) {
+        return { success: false, message: `Parameter "${paramKey}" already exists` };
+      }
+
+      const paramObj: Record<string, unknown> = {
+        name: parameter.name,
+        in: parameter.in,
+        schema: { type: parameter.type },
+      };
+      if (parameter.required) { paramObj.required = true; }
+      if (parameter.description) { paramObj.description = parameter.description; }
+      if (parameter.example !== undefined) { paramObj.example = parameter.example; }
+      if (parameter.deprecated) { paramObj.deprecated = true; }
+      if (parameter.format) { (paramObj.schema as Record<string, unknown>).format = parameter.format; }
+
+      spec.components.parameters[paramKey] = paramObj;
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error adding component parameter: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async deleteComponentParameter(
+    filePath: string,
+    paramKey: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      if (!spec.components?.parameters?.[paramKey]) {
+        return { success: false, message: `Parameter "${paramKey}" not found` };
+      }
+
+      delete spec.components.parameters[paramKey];
+
+      if (Object.keys(spec.components.parameters).length === 0) {
+        delete spec.components.parameters;
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error deleting component parameter: ${message}`);
+      return { success: false, message };
+    }
+  }
+
+  async updateComponentParameter(
+    filePath: string,
+    paramKey: string,
+    updates: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const param = spec.components?.parameters?.[paramKey];
+      if (!param) {
+        return { success: false, message: `Parameter "${paramKey}" not found` };
+      }
+
+      // Parameter-level fields
+      const paramFields = ['name', 'in', 'required', 'description', 'example', 'deprecated'];
+      for (const field of paramFields) {
+        if (field in updates) {
+          if (updates[field] === null || updates[field] === undefined) {
+            delete param[field];
+          } else {
+            param[field] = updates[field];
+          }
+        }
+      }
+
+      // Schema-level fields
+      const schemaFields = ['type', 'format', 'enum', 'default', 'pattern', 'minimum', 'maximum', 'minLength', 'maxLength', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'uniqueItems', 'nullable'];
+      if (!param.schema) { param.schema = {}; }
+      for (const field of schemaFields) {
+        if (field in updates) {
+          if (updates[field] === null || updates[field] === undefined) {
+            delete param.schema[field];
+          } else {
+            param.schema[field] = updates[field];
+          }
+        }
+      }
+
+      // Handle key rename
+      if (updates.newKey && updates.newKey !== paramKey) {
+        const newKey = updates.newKey as string;
+        if (spec.components.parameters[newKey]) {
+          return { success: false, message: `Parameter "${newKey}" already exists` };
+        }
+        // Preserve key order by rebuilding the object
+        const newParams: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(spec.components.parameters)) {
+          if (key === paramKey) {
+            newParams[newKey] = val;
+          } else {
+            newParams[key] = val;
+          }
+        }
+        spec.components.parameters = newParams;
+      }
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error updating component parameter: ${message}`);
       return { success: false, message };
     }
   }

@@ -77,6 +77,10 @@
       S.renderComponents();
     }
 
+    if (tabName === 'comp-parameters' && S.currentComponents) {
+      S.renderEditableParameters();
+    }
+
     if (tabName === 'servers' && S.currentServers) {
       S.renderServers();
     }
@@ -143,6 +147,9 @@
       case 'updateSchemas':
         S.currentComponents = message.payload.components;
         S.renderEditableSchemas();
+        if (typeof S.renderEditableParameters === 'function') {
+          S.renderEditableParameters();
+        }
         break;
       case 'showAddSchemaDialog':
         if (S.showSchemaDialog) {
