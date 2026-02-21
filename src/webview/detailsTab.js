@@ -2118,13 +2118,23 @@
   };
 
   S.handleResponseReorder = function(draggedStatusCode, targetStatusCode) {
-    if (!S.currentEndpoint || !S.currentEndpoint.responses) return;
+    if (!S.currentEndpoint || !S.currentEndpoint.responses) {
+      console.log('[reorder] No endpoint or responses');
+      return;
+    }
 
     const responses = S.currentEndpoint.responses;
     const draggedIndex = responses.findIndex(r => r.statusCode === draggedStatusCode);
     const targetIndex = responses.findIndex(r => r.statusCode === targetStatusCode);
 
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    console.log('[reorder] draggedStatusCode:', draggedStatusCode, 'targetStatusCode:', targetStatusCode);
+    console.log('[reorder] draggedIndex:', draggedIndex, 'targetIndex:', targetIndex);
+    console.log('[reorder] Before:', responses.map(r => r.statusCode));
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      console.log('[reorder] Index not found, aborting');
+      return;
+    }
 
     // Reorder the array
     const [draggedItem] = responses.splice(draggedIndex, 1);
@@ -2132,6 +2142,14 @@
 
     // Get new order of status codes
     const orderedStatusCodes = responses.map(r => r.statusCode);
+
+    console.log('[reorder] After:', orderedStatusCodes);
+    console.log('[reorder] Sending to backend:', {
+      filePath: S.currentEndpoint.filePath,
+      path: S.currentEndpoint.path,
+      method: S.currentEndpoint.method,
+      orderedStatusCodes
+    });
 
     // Send to backend
     S.vscode.postMessage({

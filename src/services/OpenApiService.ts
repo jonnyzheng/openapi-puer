@@ -92,7 +92,7 @@ export class OpenApiService {
         title: this.getTitle(spec),
         description: this.getDescription(spec),
         servers: this.getServers(spec),
-        endpoints: this.extractEndpoints(filePath, spec),
+        endpoints: this.extractEndpoints(filePath, spec, content),
         components: this.extractComponents(spec, filePath)
       };
 
@@ -271,7 +271,7 @@ export class OpenApiService {
     return jsonFiles;
   }
 
-  extractEndpoints(filePath: string, spec: OpenAPI.Document): ApiEndpoint[] {
+  extractEndpoints(filePath: string, spec: OpenAPI.Document, rawContent?: string): ApiEndpoint[] {
     const endpoints: ApiEndpoint[] = [];
     const paths = (spec as OpenAPIV3.Document).paths || (spec as OpenAPIV2.Document).paths;
 
@@ -300,7 +300,7 @@ export class OpenApiService {
           deprecated: operation.deprecated,
           parameters: this.extractParameters(operation, pathItem, spec, filePath),
           requestBody: this.extractRequestBody(operation, spec, filePath),
-          responses: this.extractResponses(operation, spec, filePath)
+          responses: this.extractResponses(operation, spec, filePath, rawContent, pathStr, method)
         };
 
         endpoints.push(endpoint);
@@ -391,11 +391,21 @@ export class OpenApiService {
   private extractResponses(
     operation: OpenAPIV3.OperationObject | OpenAPIV2.OperationObject,
     spec: OpenAPI.Document,
-    filePath?: string
+    filePath?: string,
+    rawContent?: string,
+    pathStr?: string,
+    method?: string
   ): ApiResponse[] {
     const responses: ApiResponse[] = [];
 
     if (!operation.responses) return responses;
+
+    // Get the key order from the raw JSON string to preserve file order,
+    // since JSON.parse sorts integer-like keys (e.g. "200", "404").
+    let keyOrder: string[] | null = null;
+    if (rawContent && pathStr && method) {
+      keyOrder = this.extractResponseKeyOrder(rawContent, pathStr, method);
+    }
 
     for (const [statusCode, response] of Object.entries(operation.responses)) {
       const resolved = this.resolveRef(response, spec) as OpenAPIV3.ResponseObject | OpenAPIV2.ResponseObject;
@@ -432,7 +442,102 @@ export class OpenApiService {
       responses.push(apiResponse);
     }
 
+    // Sort responses to match the key order from the raw JSON file
+    if (keyOrder && keyOrder.length > 0) {
+      responses.sort((a, b) => {
+        const idxA = keyOrder!.indexOf(a.statusCode);
+        const idxB = keyOrder!.indexOf(b.statusCode);
+        // If not found in keyOrder, put at the end
+        const posA = idxA === -1 ? keyOrder!.length : idxA;
+        const posB = idxB === -1 ? keyOrder!.length : idxB;
+        return posA - posB;
+      });
+    }
+
     return responses;
+  }
+
+  /**
+   * Extract the order of response status code keys from the raw JSON string.
+   * This is needed because JSON.parse sorts integer-like keys automatically.
+   */
+  private extractResponseKeyOrder(rawContent: string, pathStr: string, method: string): string[] | null {
+    try {
+      // Find the path key
+      const pathKey = JSON.stringify(pathStr);
+      const pathIdx = rawContent.indexOf(pathKey);
+      if (pathIdx === -1) return null;
+
+      // Find the method key after the path
+      const methodKey = JSON.stringify(method);
+      const methodIdx = rawContent.indexOf(methodKey, pathIdx);
+      if (methodIdx === -1) return null;
+
+      // Find "responses" after the method
+      const responsesIdx = rawContent.indexOf('"responses"', methodIdx);
+      if (responsesIdx === -1) return null;
+
+      // Make sure this "responses" belongs to the current operation
+      const nextMethodPatterns = ['"get"', '"post"', '"put"', '"delete"', '"patch"', '"options"', '"head"'];
+      for (const mp of nextMethodPatterns) {
+        if (mp === methodKey) continue;
+        const nextMethodIdx = rawContent.indexOf(mp, methodIdx + methodKey.length);
+        if (nextMethodIdx !== -1 && nextMethodIdx < responsesIdx) {
+          return null;
+        }
+      }
+
+      // Find the opening brace of the responses object
+      const colonIdx = rawContent.indexOf(':', responsesIdx + '"responses"'.length);
+      if (colonIdx === -1) return null;
+      const braceStart = rawContent.indexOf('{', colonIdx + 1);
+      if (braceStart === -1) return null;
+
+      // Find matching closing brace
+      let braceCount = 1;
+      let braceEnd = braceStart + 1;
+      while (braceEnd < rawContent.length && braceCount > 0) {
+        const ch = rawContent[braceEnd];
+        if (ch === '{') braceCount++;
+        else if (ch === '}') braceCount--;
+        if (braceCount > 0) braceEnd++;
+      }
+      if (braceCount !== 0) return null;
+
+      // Extract the responses block
+      const responsesBlock = rawContent.substring(braceStart, braceEnd + 1);
+
+      // Extract top-level keys from the responses block in order of appearance
+      // Match keys at the first nesting level only
+      const keys: string[] = [];
+      let depth = 0;
+      let i = 0;
+      while (i < responsesBlock.length) {
+        const ch = responsesBlock[i];
+        if (ch === '{' || ch === '[') {
+          depth++;
+        } else if (ch === '}' || ch === ']') {
+          depth--;
+        } else if (ch === '"' && depth === 1) {
+          // This is a top-level key
+          const keyEnd = responsesBlock.indexOf('"', i + 1);
+          if (keyEnd === -1) break;
+          const key = responsesBlock.substring(i + 1, keyEnd);
+          // Check that a colon follows (it's a key, not a value)
+          const afterKey = responsesBlock.substring(keyEnd + 1).trimStart();
+          if (afterKey[0] === ':') {
+            keys.push(key);
+          }
+          i = keyEnd + 1;
+          continue;
+        }
+        i++;
+      }
+
+      return keys.length > 0 ? keys : null;
+    } catch {
+      return null;
+    }
   }
 
   private extractSchema(
@@ -2281,49 +2386,29 @@ export class OpenApiService {
     method: string,
     orderedStatusCodes: string[]
   ): Promise<{ success: boolean; message?: string }> {
+    this.outputChannel.appendLine(`[reorderResponses] Called with path=${endpointPath}, method=${method}, order=${orderedStatusCodes.join(',')}`);
     return this.withWriteLock(filePath, async () => {
       try {
         const content = await fs.promises.readFile(filePath, 'utf-8');
-        const spec = JSON.parse(content);
 
-        const pathObj = spec.paths?.[endpointPath];
-        if (!pathObj) {
-          return { success: false, message: `Path ${endpointPath} not found in spec` };
+        // Use regex to reorder the responses block directly in the JSON string,
+        // because JSON.parse + Object reorders integer-like keys (e.g. "200", "404")
+        // automatically in V8, losing user-specified order.
+        const updatedContent = this.reorderResponseKeysInJson(
+          content, endpointPath, method.toLowerCase(), orderedStatusCodes
+        );
+
+        if (!updatedContent) {
+          return { success: false, message: 'Failed to reorder responses in JSON' };
         }
 
-        const operation = pathObj[method.toLowerCase()];
-        if (!operation) {
-          return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
-        }
+        // Validate the result is still valid JSON
+        JSON.parse(updatedContent);
 
-        if (!operation.responses) {
-          return { success: false, message: 'No responses to reorder' };
-        }
-
-        // Rebuild responses object in new order
-        const newResponses: Record<string, unknown> = {};
-
-        // First add responses in the specified order
-        for (const statusCode of orderedStatusCodes) {
-          if (operation.responses[statusCode]) {
-            newResponses[statusCode] = operation.responses[statusCode];
-          }
-        }
-
-        // Add any responses that weren't in the ordered list (shouldn't happen, but safety)
-        for (const [statusCode, response] of Object.entries(operation.responses)) {
-          if (!newResponses[statusCode]) {
-            newResponses[statusCode] = response;
-          }
-        }
-
-        operation.responses = newResponses;
-
-        const updatedContent = JSON.stringify(spec, null, 2);
         await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
-
         this.removeFromCache(filePath);
 
+        this.outputChannel.appendLine(`[reorderResponses] Successfully saved new order: ${orderedStatusCodes.join(',')}`);
         return { success: true };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -2331,6 +2416,149 @@ export class OpenApiService {
         return { success: false, message };
       }
     });
+  }
+
+  /**
+   * Reorder response keys directly in the JSON string to avoid V8's automatic
+   * sorting of integer-like object keys.
+   */
+  private reorderResponseKeysInJson(
+    jsonContent: string,
+    endpointPath: string,
+    method: string,
+    orderedStatusCodes: string[]
+  ): string | null {
+    try {
+      // Parse to find the responses object location and values
+      const spec = JSON.parse(jsonContent);
+      const operation = spec.paths?.[endpointPath]?.[method];
+      if (!operation?.responses) {
+        return null;
+      }
+
+      const oldResponses = operation.responses;
+
+      // Build ordered entries: [key, value] pairs in the desired order
+      const orderedEntries: [string, unknown][] = [];
+      for (const code of orderedStatusCodes) {
+        if (oldResponses[code] !== undefined) {
+          orderedEntries.push([code, oldResponses[code]]);
+        }
+      }
+      // Add any keys not in orderedStatusCodes (safety)
+      for (const key of Object.keys(oldResponses)) {
+        if (!orderedStatusCodes.includes(key)) {
+          orderedEntries.push([key, oldResponses[key]]);
+        }
+      }
+
+      // Find the "responses" block in the raw JSON string and replace it
+      // We need to locate the exact "responses": { ... } block for this operation
+      // Strategy: find the path+method operation, then find its "responses" key
+
+      // Detect single indent unit from the file (e.g. 2 spaces, 4 spaces, tab)
+      const indentMatch = jsonContent.match(/\n(\s+)"/);
+      const singleIndent = indentMatch ? indentMatch[1] : '  ';
+
+      // The responses object is at depth 4 in OpenAPI:
+      // paths (1) → /path (2) → method (3) → responses (4)
+      // Keys inside responses are at depth 5
+      const responsesStr = this.buildOrderedJsonObject(orderedEntries, singleIndent, 5);
+
+      // Now we need to find and replace the responses block in the raw string.
+      // Use a targeted approach: locate the operation's responses block.
+      const result = this.replaceResponsesBlock(jsonContent, endpointPath, method, responsesStr);
+      return result;
+    } catch (e) {
+      this.outputChannel.appendLine(`[reorderResponseKeysInJson] Error: ${e}`);
+      return null;
+    }
+  }
+
+  /**
+   * Build a JSON object string with keys in the given order.
+   */
+  private buildOrderedJsonObject(
+    entries: [string, unknown][],
+    singleIndent: string,
+    depth: number
+  ): string {
+    if (entries.length === 0) return '{}';
+
+    const currentIndent = singleIndent.repeat(depth);
+
+    const parts = entries.map(([key, value]) => {
+      const valStr = JSON.stringify(value, null, singleIndent.length);
+      // Re-indent the value string to match the current depth
+      const reindented = valStr.split('\n').map((line, i) =>
+        i === 0 ? line : currentIndent + line
+      ).join('\n');
+      return `${currentIndent}${JSON.stringify(key)}: ${reindented}`;
+    });
+
+    const closingIndent = singleIndent.repeat(depth - 1);
+    return `{\n${parts.join(',\n')}\n${closingIndent}}`;
+  }
+
+  /**
+   * Find and replace the "responses": { ... } block for a specific operation in raw JSON.
+   */
+  private replaceResponsesBlock(
+    jsonContent: string,
+    endpointPath: string,
+    method: string,
+    newResponsesStr: string
+  ): string | null {
+    // Find the path key in the JSON
+    const pathKey = JSON.stringify(endpointPath);
+    let pathIdx = jsonContent.indexOf(pathKey);
+    if (pathIdx === -1) return null;
+
+    // Find the method key after the path
+    const methodKey = JSON.stringify(method);
+    let methodIdx = jsonContent.indexOf(methodKey, pathIdx);
+    if (methodIdx === -1) return null;
+
+    // Find "responses" key after the method
+    const responsesKey = '"responses"';
+    let responsesIdx = jsonContent.indexOf(responsesKey, methodIdx);
+    if (responsesIdx === -1) return null;
+
+    // Make sure this "responses" belongs to the current operation
+    // (not some other operation's responses further in the file)
+    // Check there's no other method key between methodIdx and responsesIdx
+    const nextMethodPatterns = ['"get"', '"post"', '"put"', '"delete"', '"patch"', '"options"', '"head"'];
+    for (const mp of nextMethodPatterns) {
+      if (mp === methodKey) continue;
+      const nextMethodIdx = jsonContent.indexOf(mp, methodIdx + methodKey.length);
+      if (nextMethodIdx !== -1 && nextMethodIdx < responsesIdx) {
+        // This responses key belongs to a different operation
+        return null;
+      }
+    }
+
+    // Find the colon after "responses"
+    let colonIdx = jsonContent.indexOf(':', responsesIdx + responsesKey.length);
+    if (colonIdx === -1) return null;
+
+    // Find the opening brace of the responses object
+    let braceStart = jsonContent.indexOf('{', colonIdx + 1);
+    if (braceStart === -1) return null;
+
+    // Find the matching closing brace
+    let braceCount = 1;
+    let braceEnd = braceStart + 1;
+    while (braceEnd < jsonContent.length && braceCount > 0) {
+      const ch = jsonContent[braceEnd];
+      if (ch === '{') braceCount++;
+      else if (ch === '}') braceCount--;
+      if (braceCount > 0) braceEnd++;
+    }
+
+    if (braceCount !== 0) return null;
+
+    // Replace the responses object
+    return jsonContent.substring(0, braceStart) + newResponsesStr + jsonContent.substring(braceEnd + 1);
   }
 
   async updateResponseSource(

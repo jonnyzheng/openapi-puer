@@ -3677,6 +3677,12 @@ td.no-params-message {
   justify-content: flex-end;
 }
 
+.response-source-actions .primary-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* Response Source Editor with Syntax Highlighting */
 .response-source-editor-wrapper {
   position: relative;

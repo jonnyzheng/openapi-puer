@@ -743,12 +743,14 @@ function registerPanelHandlers(panel: ApiPanel): void {
 
   // Handle reorder responses
   panel.onReorderResponses(async (data) => {
+    console.log('[registerPanelHandlers] onReorderResponses received:', data);
     const result = await openApiService.reorderResponses(
       data.filePath,
       data.path,
       data.method,
       data.orderedStatusCodes
     );
+    console.log('[registerPanelHandlers] reorderResponses result:', result);
 
     panel.notifyOverviewSaved(result.success, result.message);
 
@@ -1076,7 +1078,9 @@ function setupNewTabHandlers(panel: ApiPanel): void {
   });
 
   panel.onReorderResponses(async (data) => {
+    console.log('[setupNewTabHandlers] onReorderResponses received:', data);
     const result = await openApiService.reorderResponses(data.filePath, data.path, data.method, data.orderedStatusCodes);
+    console.log('[setupNewTabHandlers] reorderResponses result:', result);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) { await refreshApiFiles(); }
   });
