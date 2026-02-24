@@ -10,9 +10,9 @@ suite('Extension Test Suite', () => {
 
   test('Extension should activate', async () => {
     const extension = vscode.extensions.getExtension('openapi-puer.openapi-puer');
-    if (extension) {
-      await extension.activate();
-      assert.ok(extension.isActive);
-    }
+    assert.ok(extension, 'Extension openapi-puer.openapi-puer should be present');
+
+    await extension.activate();
+    assert.ok(extension.isActive);
   });
 });

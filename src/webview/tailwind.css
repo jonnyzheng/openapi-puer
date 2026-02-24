@@ -254,7 +254,7 @@ body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 #details-tab {
@@ -1764,6 +1764,7 @@ pre[class*="language-"] {
   color: var(--vscode-editor-foreground);
   white-space: pre;
   tab-size: 2;
+  background-color: transparent;
 }
 
 .component-name {
