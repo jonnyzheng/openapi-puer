@@ -2365,6 +2365,20 @@ tr:hover .detail-field-delete-btn {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.server-dialog.server-dialog-sm {
+  min-width: 360px;
+  max-width: 420px;
+}
+
+.server-dialog.server-dialog-sm .server-form {
+  gap: 8px;
+}
+
+.server-dialog.server-dialog-sm .server-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .server-dialog h3 {
   margin: 0 0 16px 0;
   font-size: 16px;

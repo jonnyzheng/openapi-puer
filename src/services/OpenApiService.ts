@@ -2067,19 +2067,35 @@ export class OpenApiService {
         return { success: false, message: `Schema "${schemaName}" not found` };
       }
 
-      // Preserve non-property fields from the existing schema (like 'type', 'title', 'description' at schema level)
-      const existingSchema = schemas[schemaName] as Record<string, unknown>;
-      const updatedSchema: Record<string, unknown> = {
-        ...existingSchema,
-        type: schema.type || existingSchema.type || 'object',
-        properties: schema.properties || {},
-      };
+      const schemaType = (schema.type as string) || 'object';
+      const isObject = schemaType === 'object' || (!schema.type && schema.properties);
 
-      // Update required array
-      if (schema.required && Array.isArray(schema.required) && (schema.required as unknown[]).length > 0) {
-        updatedSchema.required = schema.required;
+      let updatedSchema: Record<string, unknown>;
+
+      if (isObject) {
+        // Object schema: preserve non-property fields, update properties and required
+        const existingSchema = schemas[schemaName] as Record<string, unknown>;
+        updatedSchema = {
+          ...existingSchema,
+          type: schema.type || existingSchema.type || 'object',
+          properties: schema.properties || {},
+        };
+
+        // Update required array
+        if (schema.required && Array.isArray(schema.required) && (schema.required as unknown[]).length > 0) {
+          updatedSchema.required = schema.required;
+        } else {
+          delete updatedSchema.required;
+        }
       } else {
-        delete updatedSchema.required;
+        // Non-object schema: use the incoming schema as the full replacement
+        updatedSchema = { ...schema };
+        // Clean up undefined/null values
+        for (const key of Object.keys(updatedSchema)) {
+          if (updatedSchema[key] === undefined || updatedSchema[key] === null || updatedSchema[key] === '') {
+            delete updatedSchema[key];
+          }
+        }
       }
 
       schemas[schemaName] = updatedSchema;

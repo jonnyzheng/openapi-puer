@@ -2,6 +2,77 @@
 (function() {
   const S = window.OpenAPIPuer;
 
+  // Helper: determine if a schema should use SchemaTable (object) or detail table (primitive)
+  function isObjectSchema(schema) {
+    return schema.type === 'object' || (!schema.type && schema.properties);
+  }
+
+  // Field definitions for non-object schema visual display
+  var NON_OBJECT_FIELDS = {
+    // Always available
+    common: [
+      { key: 'description', label: 'Description', inputType: 'text', placeholder: 'Schema description' },
+      { key: 'example', label: 'Example', inputType: 'text', placeholder: 'Example value' },
+      { key: 'default', label: 'Default', inputType: 'text', placeholder: 'Default value' },
+      { key: 'nullable', label: 'Nullable', inputType: 'toggle' },
+      { key: 'deprecated', label: 'Deprecated', inputType: 'toggle' },
+      { key: 'readOnly', label: 'Read Only', inputType: 'toggle' },
+      { key: 'writeOnly', label: 'Write Only', inputType: 'toggle' }
+    ],
+    // Type-specific fields
+    string: [
+      { key: 'format', label: 'Format', inputType: 'select', options: ['', 'date', 'date-time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary', 'password'] },
+      { key: 'enum', label: 'Enum', inputType: 'text', placeholder: 'Comma-separated values' },
+      { key: 'pattern', label: 'Pattern', inputType: 'text', placeholder: 'e.g. ^[a-zA-Z]+$' },
+      { key: 'minLength', label: 'Min Length', inputType: 'number', placeholder: '' },
+      { key: 'maxLength', label: 'Max Length', inputType: 'number', placeholder: '' }
+    ],
+    integer: [
+      { key: 'format', label: 'Format', inputType: 'select', options: ['', 'int32', 'int64'] },
+      { key: 'enum', label: 'Enum', inputType: 'text', placeholder: 'Comma-separated values' },
+      { key: 'minimum', label: 'Minimum', inputType: 'number', placeholder: '' },
+      { key: 'maximum', label: 'Maximum', inputType: 'number', placeholder: '' }
+    ],
+    number: [
+      { key: 'format', label: 'Format', inputType: 'select', options: ['', 'float', 'double'] },
+      { key: 'enum', label: 'Enum', inputType: 'text', placeholder: 'Comma-separated values' },
+      { key: 'minimum', label: 'Minimum', inputType: 'number', placeholder: '' },
+      { key: 'maximum', label: 'Maximum', inputType: 'number', placeholder: '' }
+    ],
+    boolean: [],
+    array: [
+      { key: 'minItems', label: 'Min Items', inputType: 'number', placeholder: '' },
+      { key: 'maxItems', label: 'Max Items', inputType: 'number', placeholder: '' },
+      { key: 'uniqueItems', label: 'Unique Items', inputType: 'toggle' }
+    ]
+  };
+
+  // Get all available fields for a given type
+  function getFieldsForType(type) {
+    var typeSpecific = NON_OBJECT_FIELDS[type] || [];
+    return typeSpecific.concat(NON_OBJECT_FIELDS.common);
+  }
+
+  // Get the value of a schema field, handling special cases
+  function getSchemaFieldValue(schema, key) {
+    if (key === 'enum' && schema.enum) {
+      return schema.enum.join(', ');
+    }
+    if (key === 'example' && schema.example !== undefined) {
+      return typeof schema.example === 'object' ? JSON.stringify(schema.example) : String(schema.example);
+    }
+    if (key === 'default' && schema.default !== undefined) {
+      return typeof schema.default === 'object' ? JSON.stringify(schema.default) : String(schema.default);
+    }
+    return schema[key];
+  }
+
+  // Check if a field exists in the schema
+  function schemaHasField(schema, key) {
+    if (key === 'enum') return schema.enum && schema.enum.length > 0;
+    return schema[key] !== undefined && schema[key] !== null;
+  }
+
   S.renderComponents = function() {
     const escapeHtml = S.escapeHtml;
     const capitalizeFirst = S.capitalizeFirst;
@@ -118,10 +189,12 @@
 
     S.currentComponents = payload.components;
     S.currentFilePath = payload.filePath;
+    S.currentFileType = null;
 
     var hasSchemas = payload.components && payload.components.schemas && Object.keys(payload.components.schemas).length > 0;
     var hasParameters = payload.components && payload.components.parameters && Object.keys(payload.components.parameters).length > 0;
     var isParameterOnly = hasParameters && !hasSchemas;
+    S.currentFileType = isParameterOnly ? 'parameter' : 'schema';
 
     // Build tabs HTML
     var tabsHtml = '';
@@ -1291,6 +1364,480 @@
     });
   };
 
+  // Create visual layout for non-object schema types (string, integer, number, boolean, array)
+  function createNonObjectSchemaVisual(schemaName, schema) {
+    var escapeHtml = S.escapeHtml;
+    var container = document.createElement('div');
+    var currentSchema = Object.assign({}, schema);
+    var currentType = schema.type || 'string';
+    var rowElements = {}; // track rendered rows by key
+
+    var table = document.createElement('table');
+    table.className = 'param-detail-table';
+    var tbody = document.createElement('tbody');
+
+    // Save current schema state to extension and update local data
+    function saveSchema() {
+      // Update local data so Source tab reflects changes immediately
+      if (S.currentComponents && S.currentComponents.schemas) {
+        S.currentComponents.schemas[schemaName] = Object.assign({}, currentSchema);
+      }
+      S.vscode.postMessage({
+        type: 'updateFullSchema',
+        payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: currentSchema }
+      });
+    }
+
+    // Remove a row from the table and schema
+    function removeRow(key, tr) {
+      delete currentSchema[key];
+      delete rowElements[key];
+      tr.remove();
+      saveSchema();
+      updateAddFieldBtn();
+    }
+
+    // Add a row to the table for a given field definition
+    function addRow(fieldDef, value) {
+      var key = fieldDef.key;
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-field-key', key);
+
+      var labelTd = document.createElement('td');
+      labelTd.innerHTML = '<strong>' + escapeHtml(fieldDef.label) + '</strong>';
+
+      var valueTd = document.createElement('td');
+      valueTd.className = 'editable-cell';
+
+      if (fieldDef.inputType === 'toggle') {
+        var switchLabel = document.createElement('label');
+        switchLabel.className = 'switch-toggle';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!value;
+        cb.addEventListener('change', function() {
+          currentSchema[key] = cb.checked ? true : undefined;
+          if (!cb.checked) delete currentSchema[key];
+          else currentSchema[key] = true;
+          saveSchema();
+        });
+        var slider = document.createElement('span');
+        slider.className = 'switch-slider';
+        switchLabel.appendChild(cb);
+        switchLabel.appendChild(slider);
+        valueTd.appendChild(switchLabel);
+      } else if (fieldDef.inputType === 'select') {
+        var span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        span.textContent = value || '—';
+        valueTd.appendChild(span);
+        valueTd.addEventListener('click', function() {
+          if (valueTd.querySelector('select')) return;
+          var select = document.createElement('select');
+          select.className = 'inline-edit-select';
+          var options = fieldDef.options || [];
+          options.forEach(function(opt) {
+            var option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt || '(none)';
+            if (opt === (value || '')) option.selected = true;
+            select.appendChild(option);
+          });
+          valueTd.innerHTML = '';
+          valueTd.appendChild(select);
+          select.focus();
+
+          function save() {
+            var newVal = select.value;
+            if (newVal) {
+              currentSchema[key] = newVal;
+            } else {
+              delete currentSchema[key];
+            }
+            span.textContent = newVal || '—';
+            valueTd.innerHTML = '';
+            valueTd.appendChild(span);
+            value = newVal;
+            saveSchema();
+          }
+          select.addEventListener('blur', save);
+          select.addEventListener('change', save);
+        });
+      } else {
+        // text or number
+        var span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        span.textContent = (value !== undefined && value !== null && value !== '') ? String(value) : '—';
+        valueTd.appendChild(span);
+        valueTd.addEventListener('click', function() {
+          if (valueTd.querySelector('input')) return;
+          var input = document.createElement('input');
+          input.type = fieldDef.inputType === 'number' ? 'number' : 'text';
+          input.className = 'inline-edit-input';
+          input.value = (value !== undefined && value !== null) ? String(value) : '';
+          if (fieldDef.placeholder) input.placeholder = fieldDef.placeholder;
+          valueTd.innerHTML = '';
+          valueTd.appendChild(input);
+          input.focus();
+          input.select();
+
+          function save() {
+            var newVal = input.value.trim();
+            // Update schema
+            if (key === 'enum') {
+              if (newVal) {
+                currentSchema.enum = newVal.split(',').map(function(v) { return v.trim(); }).filter(function(v) { return v; });
+              } else {
+                delete currentSchema.enum;
+              }
+            } else if (key === 'example' || key === 'default') {
+              if (newVal) {
+                try { currentSchema[key] = JSON.parse(newVal); } catch(e) { currentSchema[key] = newVal; }
+              } else {
+                delete currentSchema[key];
+              }
+            } else if (fieldDef.inputType === 'number') {
+              if (newVal !== '') {
+                currentSchema[key] = Number(newVal);
+              } else {
+                delete currentSchema[key];
+              }
+            } else {
+              if (newVal) {
+                currentSchema[key] = newVal;
+              } else {
+                delete currentSchema[key];
+              }
+            }
+            value = newVal;
+            span.textContent = newVal || '—';
+            valueTd.innerHTML = '';
+            valueTd.appendChild(span);
+            saveSchema();
+          }
+          input.addEventListener('blur', save);
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); save(); }
+            else if (e.key === 'Escape') {
+              valueTd.innerHTML = '';
+              valueTd.appendChild(span);
+            }
+          });
+        });
+      }
+
+      tr.appendChild(labelTd);
+      tr.appendChild(valueTd);
+
+      // Delete button (not for 'type' row — type is always shown)
+      var deleteTd = document.createElement('td');
+      deleteTd.className = 'detail-field-delete';
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'detail-field-delete-btn';
+      deleteBtn.textContent = '✕';
+      deleteBtn.title = 'Remove field';
+      deleteBtn.addEventListener('click', function() {
+        removeRow(key, tr);
+      });
+      deleteTd.appendChild(deleteBtn);
+      tr.appendChild(deleteTd);
+
+      tbody.appendChild(tr);
+      rowElements[key] = tr;
+      return tr;
+    }
+
+    // Type row (always shown, no delete button)
+    (function() {
+      var tr = document.createElement('tr');
+      var labelTd = document.createElement('td');
+      labelTd.innerHTML = '<strong>Type</strong>';
+      var valueTd = document.createElement('td');
+      valueTd.className = 'editable-cell';
+
+      var span = document.createElement('span');
+      span.className = 'editable-cell-value';
+      span.textContent = currentType;
+      valueTd.appendChild(span);
+      valueTd.addEventListener('click', function() {
+        if (valueTd.querySelector('select')) return;
+        var select = document.createElement('select');
+        select.className = 'inline-edit-select';
+        ['string', 'integer', 'number', 'boolean', 'array'].forEach(function(t) {
+          var opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t;
+          if (t === currentType) opt.selected = true;
+          select.appendChild(opt);
+        });
+        valueTd.innerHTML = '';
+        valueTd.appendChild(select);
+        select.focus();
+
+        function save() {
+          var newType = select.value;
+          if (newType !== currentType) {
+            // Remove fields not valid for new type
+            var newFields = getFieldsForType(newType);
+            var newFieldKeys = newFields.map(function(f) { return f.key; });
+            for (var rKey in rowElements) {
+              if (newFieldKeys.indexOf(rKey) === -1) {
+                delete currentSchema[rKey];
+                rowElements[rKey].remove();
+                delete rowElements[rKey];
+              }
+            }
+            currentType = newType;
+            currentSchema.type = newType;
+          }
+          span.textContent = newType;
+          valueTd.innerHTML = '';
+          valueTd.appendChild(span);
+          saveSchema();
+          updateAddFieldBtn();
+        }
+        select.addEventListener('blur', save);
+        select.addEventListener('change', save);
+      });
+
+      tr.appendChild(labelTd);
+      tr.appendChild(valueTd);
+      // Empty cell for alignment with delete column
+      var emptyTd = document.createElement('td');
+      tr.appendChild(emptyTd);
+      tbody.appendChild(tr);
+    })();
+
+    // Render existing fields
+    var allFields = getFieldsForType(currentType);
+    allFields.forEach(function(fieldDef) {
+      if (schemaHasField(schema, fieldDef.key)) {
+        var value = getSchemaFieldValue(schema, fieldDef.key);
+        addRow(fieldDef, value);
+      }
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Add Field button + dialog
+    var addFieldContainer = document.createElement('div');
+    addFieldContainer.className = 'add-field-container';
+    addFieldContainer.style.marginTop = '8px';
+
+    var addFieldBtn = document.createElement('button');
+    addFieldBtn.className = 'add-field-btn';
+    addFieldBtn.textContent = '+ Add Field';
+
+    function updateAddFieldBtn() {
+      var available = getAvailableFields();
+      addFieldBtn.style.display = available.length === 0 ? 'none' : '';
+    }
+
+    function getAvailableFields() {
+      var fields = getFieldsForType(currentType);
+      return fields.filter(function(f) { return !rowElements[f.key]; });
+    }
+
+    function showAddFieldDialog() {
+      var existingDialog = document.querySelector('.server-dialog-overlay');
+      if (existingDialog) existingDialog.remove();
+
+      var available = getAvailableFields();
+      if (available.length === 0) return;
+
+      var overlay = document.createElement('div');
+      overlay.className = 'server-dialog-overlay';
+
+      var dialog = document.createElement('div');
+      dialog.className = 'server-dialog server-dialog-sm';
+
+      var title = document.createElement('h3');
+      title.textContent = 'Add Field';
+
+      var form = document.createElement('div');
+      form.className = 'server-form';
+
+      // Field select
+      var fieldLabel = document.createElement('label');
+      fieldLabel.textContent = 'Field *';
+      var fieldSelect = document.createElement('select');
+      fieldSelect.className = 'server-input';
+      available.forEach(function(fieldDef) {
+        var opt = document.createElement('option');
+        opt.value = fieldDef.key;
+        opt.textContent = fieldDef.label;
+        fieldSelect.appendChild(opt);
+      });
+
+      form.appendChild(fieldLabel);
+      form.appendChild(fieldSelect);
+
+      // Value input area — changes based on selected field
+      var valueLabel = document.createElement('label');
+      valueLabel.textContent = 'Value';
+      var valueContainer = document.createElement('div');
+
+      function getFieldDef(key) {
+        for (var i = 0; i < available.length; i++) {
+          if (available[i].key === key) return available[i];
+        }
+        return null;
+      }
+
+      var currentValueInput = null;
+
+      function renderValueInput() {
+        valueContainer.innerHTML = '';
+        var fieldDef = getFieldDef(fieldSelect.value);
+        if (!fieldDef) return;
+
+        if (fieldDef.inputType === 'toggle') {
+          // Checkbox for boolean fields
+          var checkLabel = document.createElement('label');
+          checkLabel.className = 'schema-checkbox-label';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          checkLabel.appendChild(cb);
+          checkLabel.appendChild(document.createTextNode(' ' + fieldDef.label));
+          valueContainer.appendChild(checkLabel);
+          currentValueInput = cb;
+          valueLabel.textContent = 'Value';
+        } else if (fieldDef.inputType === 'select') {
+          // Select dropdown for format fields
+          var sel = document.createElement('select');
+          sel.className = 'server-input';
+          (fieldDef.options || []).forEach(function(optVal) {
+            var opt = document.createElement('option');
+            opt.value = optVal;
+            opt.textContent = optVal || '(none)';
+            sel.appendChild(opt);
+          });
+          valueContainer.appendChild(sel);
+          currentValueInput = sel;
+          valueLabel.textContent = 'Value';
+        } else if (fieldDef.inputType === 'number') {
+          var numInput = document.createElement('input');
+          numInput.type = 'number';
+          numInput.className = 'server-input';
+          if (fieldDef.placeholder) numInput.placeholder = fieldDef.placeholder;
+          valueContainer.appendChild(numInput);
+          currentValueInput = numInput;
+          valueLabel.textContent = 'Value';
+        } else {
+          // Text input
+          var textInput = document.createElement('input');
+          textInput.type = 'text';
+          textInput.className = 'server-input';
+          if (fieldDef.placeholder) textInput.placeholder = fieldDef.placeholder;
+          valueContainer.appendChild(textInput);
+          currentValueInput = textInput;
+          valueLabel.textContent = 'Value';
+        }
+      }
+
+      fieldSelect.addEventListener('change', renderValueInput);
+      renderValueInput();
+
+      form.appendChild(valueLabel);
+      form.appendChild(valueContainer);
+
+      // Buttons
+      var buttons = document.createElement('div');
+      buttons.className = 'server-dialog-buttons';
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'server-dialog-cancel';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', function() { overlay.remove(); });
+
+      var addBtn = document.createElement('button');
+      addBtn.className = 'server-dialog-save';
+      addBtn.textContent = 'Add';
+      addBtn.addEventListener('click', function() {
+        var fieldDef = getFieldDef(fieldSelect.value);
+        if (!fieldDef) return;
+
+        var key = fieldDef.key;
+        var value;
+
+        if (fieldDef.inputType === 'toggle') {
+          value = currentValueInput.checked;
+          currentSchema[key] = value ? true : false;
+        } else if (fieldDef.inputType === 'select') {
+          value = currentValueInput.value;
+          if (value) {
+            currentSchema[key] = value;
+          } else {
+            currentSchema[key] = '';
+          }
+        } else if (key === 'enum') {
+          var rawVal = currentValueInput.value.trim();
+          if (rawVal) {
+            currentSchema.enum = rawVal.split(',').map(function(v) { return v.trim(); }).filter(function(v) { return v; });
+            value = rawVal;
+          } else {
+            currentSchema.enum = [];
+            value = '';
+          }
+        } else if (key === 'example' || key === 'default') {
+          var rawVal = currentValueInput.value.trim();
+          if (rawVal) {
+            try { currentSchema[key] = JSON.parse(rawVal); } catch(e) { currentSchema[key] = rawVal; }
+          } else {
+            currentSchema[key] = '';
+          }
+          value = rawVal;
+        } else if (fieldDef.inputType === 'number') {
+          var numVal = currentValueInput.value.trim();
+          if (numVal !== '') {
+            currentSchema[key] = Number(numVal);
+            value = Number(numVal);
+          } else {
+            currentSchema[key] = 0;
+            value = 0;
+          }
+        } else {
+          value = currentValueInput.value.trim();
+          currentSchema[key] = value || '';
+        }
+
+        // Add the row to the table
+        addRow(fieldDef, value);
+        saveSchema();
+        updateAddFieldBtn();
+        overlay.remove();
+      });
+
+      buttons.appendChild(cancelBtn);
+      buttons.appendChild(addBtn);
+      dialog.appendChild(title);
+      dialog.appendChild(form);
+      dialog.appendChild(buttons);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      // Keyboard handling
+      overlay.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') overlay.remove();
+        else if (e.key === 'Enter') addBtn.click();
+      });
+
+      fieldSelect.focus();
+    }
+
+    addFieldBtn.addEventListener('click', function() {
+      showAddFieldDialog();
+    });
+
+    addFieldContainer.appendChild(addFieldBtn);
+    container.appendChild(addFieldContainer);
+
+    updateAddFieldBtn();
+
+    return container;
+  }
+
   S.renderEditableSchemas = function() {
     var escapeHtml = S.escapeHtml;
     var container = document.getElementById('schemas-editable-content');
@@ -1350,7 +1897,12 @@
         });
       });
 
-      headerActions.appendChild(addPropBtn);
+      var isObject = isObjectSchema(schema);
+
+      // Only show "+ Property" for object schemas
+      if (isObject) {
+        headerActions.appendChild(addPropBtn);
+      }
       headerActions.appendChild(deleteSchemaBtn);
 
       header.appendChild(nameSpan);
@@ -1358,13 +1910,13 @@
       header.appendChild(headerActions);
       card.appendChild(header);
 
-      // Schema card tabs (Properties / Source)
+      // Schema card tabs (Properties/Visual / Source)
       var schemaTabBar = document.createElement('div');
       schemaTabBar.className = 'schema-card-tabs';
 
       var propsTabBtn = document.createElement('button');
       propsTabBtn.className = 'schema-card-tab-btn active';
-      propsTabBtn.textContent = 'Properties';
+      propsTabBtn.textContent = isObject ? 'Properties' : 'Visual';
 
       var sourceTabBtn = document.createElement('button');
       sourceTabBtn.className = 'schema-card-tab-btn';
@@ -1415,41 +1967,47 @@
         });
       })(propsTabBtn, sourceTabBtn, propsContent, sourceContent, name, sourceCode);
 
-      // Properties table - use reusable SchemaTable component
-      (function(schemaName, schemaData, propsContainer) {
-        // Add Save button (hidden initially)
-        var saveRow = document.createElement('div');
-        saveRow.className = 'schema-save-row';
-        saveRow.style.display = 'none';
-        var saveBtn = document.createElement('button');
-        saveBtn.className = 'schema-save-btn';
-        saveBtn.textContent = 'Save Schema';
+      if (isObject) {
+        // Properties table - use reusable SchemaTable component
+        (function(schemaName, schemaData, propsContainer) {
+          // Add Save button (hidden initially)
+          var saveRow = document.createElement('div');
+          saveRow.className = 'schema-save-row';
+          saveRow.style.display = 'none';
+          var saveBtn = document.createElement('button');
+          saveBtn.className = 'schema-save-btn';
+          saveBtn.textContent = 'Save Schema';
 
-        var schemaTableInstance = window.SchemaTable.create({
-          container: propsContainer,
-          schema: schemaData,
-          onDirtyChange: function(isDirty) {
-            saveRow.style.display = isDirty ? '' : 'none';
-          },
-          onShowOthersDialog: function(propName, propDef, onSave) {
-            S.showPropertyDetailDialog(schemaName, propName, propDef, onSave);
-          }
-        });
-
-        // Store reference for potential cleanup
-        propsContainer._schemaTable = schemaTableInstance;
-
-        saveBtn.addEventListener('click', function() {
-          var newSchema = schemaTableInstance.getSchema();
-          S.vscode.postMessage({
-            type: 'updateFullSchema',
-            payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: newSchema }
+          var schemaTableInstance = window.SchemaTable.create({
+            container: propsContainer,
+            schema: schemaData,
+            onDirtyChange: function(isDirty) {
+              saveRow.style.display = isDirty ? '' : 'none';
+            },
+            onShowOthersDialog: function(propName, propDef, onSave) {
+              S.showPropertyDetailDialog(schemaName, propName, propDef, onSave);
+            }
           });
-          schemaTableInstance.setClean();
-        });
-        saveRow.appendChild(saveBtn);
-        propsContainer.appendChild(saveRow);
-      })(name, schema, propsContent);
+
+          // Store reference for potential cleanup
+          propsContainer._schemaTable = schemaTableInstance;
+
+          saveBtn.addEventListener('click', function() {
+            var newSchema = schemaTableInstance.getSchema();
+            S.vscode.postMessage({
+              type: 'updateFullSchema',
+              payload: { filePath: S.currentFilePath, schemaName: schemaName, schema: newSchema }
+            });
+            schemaTableInstance.setClean();
+          });
+          saveRow.appendChild(saveBtn);
+          propsContainer.appendChild(saveRow);
+        })(name, schema, propsContent);
+      } else {
+        // Non-object schema: render key-value detail table
+        var visualContent = createNonObjectSchemaVisual(name, schema);
+        propsContent.appendChild(visualContent);
+      }
 
       card.appendChild(propsContent);
       card.appendChild(sourceContent);
@@ -1815,6 +2373,30 @@
   S.showComponentParameterDialog = function() {
     var existingDialog = document.querySelector('.server-dialog-overlay');
     if (existingDialog) existingDialog.remove();
+    // Determine default location based on file type
+    var defaultLocation = 'query';
+    var isReadOnly = false;
+    
+    if (S.currentFileType === 'parameter') {
+      // For parameter-only files, find the most common location
+      var parameters = S.currentComponents.parameters || {};
+      var locationCounts = {};
+      Object.keys(parameters).forEach(function(key) {
+        var loc = parameters[key]._paramIn || 'query';
+        locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+      });
+      
+      // Find the most common location
+      var maxCount = 0;
+      Object.keys(locationCounts).forEach(function(loc) {
+        if (locationCounts[loc] > maxCount) {
+          maxCount = locationCounts[loc];
+          defaultLocation = loc;
+        }
+      });
+      
+      isReadOnly = true;
+    }
 
     var overlay = document.createElement('div');
     overlay.className = 'server-dialog-overlay';
@@ -1849,10 +2431,14 @@
     locLabel.textContent = 'Location *';
     var locSelect = document.createElement('select');
     locSelect.className = 'server-input';
+    locSelect.disabled = isReadOnly;
     ['query', 'header', 'path', 'cookie'].forEach(function(loc) {
       var opt = document.createElement('option');
       opt.value = loc;
       opt.textContent = loc;
+      if (loc === defaultLocation) {
+        opt.selected = true;
+      }
       locSelect.appendChild(opt);
     });
 
@@ -1896,84 +2482,6 @@
     form.appendChild(descLabel);
     form.appendChild(descInput);
 
-    // Advanced section
-    var advToggle = document.createElement('div');
-    advToggle.className = 'advanced-toggle';
-    advToggle.textContent = '▶ Advanced';
-    advToggle.style.cursor = 'pointer';
-    advToggle.style.fontSize = '12px';
-    advToggle.style.color = 'var(--vscode-textLink-foreground)';
-    advToggle.style.marginTop = '8px';
-    advToggle.style.userSelect = 'none';
-
-    var advContent = document.createElement('div');
-    advContent.style.display = 'none';
-    advContent.style.marginTop = '8px';
-
-    advToggle.addEventListener('click', function() {
-      if (advContent.style.display === 'none') {
-        advContent.style.display = 'block';
-        advToggle.textContent = '▼ Advanced';
-      } else {
-        advContent.style.display = 'none';
-        advToggle.textContent = '▶ Advanced';
-      }
-    });
-
-    // Example
-    var advExampleLabel = document.createElement('label');
-    advExampleLabel.textContent = 'Example';
-    var advExampleInput = document.createElement('input');
-    advExampleInput.type = 'text';
-    advExampleInput.className = 'server-input';
-    advExampleInput.placeholder = 'Example value';
-
-    // Deprecated
-    var advDeprecatedLbl = document.createElement('label');
-    advDeprecatedLbl.className = 'schema-checkbox-label';
-    var advDeprecatedCb = document.createElement('input');
-    advDeprecatedCb.type = 'checkbox';
-    advDeprecatedLbl.appendChild(advDeprecatedCb);
-    advDeprecatedLbl.appendChild(document.createTextNode(' Deprecated'));
-
-    // Format
-    var advFormatLabel = document.createElement('label');
-    advFormatLabel.textContent = 'Format';
-    var advFormatSelect = document.createElement('select');
-    advFormatSelect.className = 'server-input';
-    var updateFormatOptions = function() {
-      var formatOptions = { string: ['', 'date', 'date-time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary', 'password'], integer: ['', 'int32', 'int64'], number: ['', 'float', 'double'] };
-      var opts = formatOptions[typeSelect.value] || [''];
-      advFormatSelect.innerHTML = '';
-      opts.forEach(function(f) {
-        var opt = document.createElement('option');
-        opt.value = f;
-        opt.textContent = f || '(none)';
-        advFormatSelect.appendChild(opt);
-      });
-    };
-    updateFormatOptions();
-    typeSelect.addEventListener('change', updateFormatOptions);
-
-    // Enum
-    var advEnumLabel = document.createElement('label');
-    advEnumLabel.textContent = 'Enum (comma-separated)';
-    var advEnumInput = document.createElement('input');
-    advEnumInput.type = 'text';
-    advEnumInput.className = 'server-input';
-    advEnumInput.placeholder = 'e.g. active, inactive, pending';
-
-    advContent.appendChild(advExampleLabel);
-    advContent.appendChild(advExampleInput);
-    advContent.appendChild(advDeprecatedLbl);
-    advContent.appendChild(advFormatLabel);
-    advContent.appendChild(advFormatSelect);
-    advContent.appendChild(advEnumLabel);
-    advContent.appendChild(advEnumInput);
-
-    form.appendChild(advToggle);
-    form.appendChild(advContent);
-
     // Buttons
     var buttons = document.createElement('div');
     buttons.className = 'server-dialog-buttons';
@@ -1999,15 +2507,6 @@
         required: reqCheckbox.checked || undefined,
         description: descInput.value.trim() || undefined,
       };
-
-      // Advanced fields
-      var exVal = advExampleInput.value.trim();
-      if (exVal) {
-        try { parameter.example = JSON.parse(exVal); } catch(e) { parameter.example = exVal; }
-      }
-      if (advDeprecatedCb.checked) { parameter.deprecated = true; }
-      var fmtVal = advFormatSelect.value;
-      if (fmtVal) { parameter.format = fmtVal; }
 
       S.vscode.postMessage({
         type: 'addComponentParameter',
