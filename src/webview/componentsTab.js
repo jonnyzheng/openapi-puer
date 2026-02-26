@@ -1639,192 +1639,247 @@
       return fields.filter(function(f) { return !rowElements[f.key]; });
     }
 
-    function showAddFieldDialog() {
-      var existingDialog = document.querySelector('.server-dialog-overlay');
-      if (existingDialog) existingDialog.remove();
+  function showAddFieldDialog() {
+    var existingDialog = document.querySelector('.server-dialog-overlay');
+    if (existingDialog) existingDialog.remove();
 
-      var available = getAvailableFields();
-      if (available.length === 0) return;
+    var available = getAvailableFields();
+    if (available.length === 0) return;
 
-      var overlay = document.createElement('div');
-      overlay.className = 'server-dialog-overlay';
+    var overlay = document.createElement('div');
+    overlay.className = 'server-dialog-overlay';
 
-      var dialog = document.createElement('div');
-      dialog.className = 'server-dialog server-dialog-sm';
+    var dialog = document.createElement('div');
+    dialog.className = 'server-dialog server-dialog-sm';
 
-      var title = document.createElement('h3');
-      title.textContent = 'Add Field';
+    var title = document.createElement('h3');
+    title.textContent = 'Add Field';
 
-      var form = document.createElement('div');
-      form.className = 'server-form';
+    var form = document.createElement('div');
+    form.className = 'server-form';
 
-      // Field select
-      var fieldLabel = document.createElement('label');
-      fieldLabel.textContent = 'Field *';
-      var fieldSelect = document.createElement('select');
-      fieldSelect.className = 'server-input';
-      available.forEach(function(fieldDef) {
-        var opt = document.createElement('option');
-        opt.value = fieldDef.key;
-        opt.textContent = fieldDef.label;
-        fieldSelect.appendChild(opt);
-      });
-
-      form.appendChild(fieldLabel);
-      form.appendChild(fieldSelect);
-
-      // Value input area — changes based on selected field
-      var valueLabel = document.createElement('label');
-      valueLabel.textContent = 'Value';
-      var valueContainer = document.createElement('div');
-
-      function getFieldDef(key) {
-        for (var i = 0; i < available.length; i++) {
-          if (available[i].key === key) return available[i];
-        }
-        return null;
+    // Group available fields by section
+    var fieldsBySection = {};
+    available.forEach(function(fieldDef) {
+      var section = FIELD_TO_SECTION[fieldDef.key] || 'General';
+      if (!fieldsBySection[section]) {
+        fieldsBySection[section] = [];
       }
+      fieldsBySection[section].push(fieldDef);
+    });
 
-      var currentValueInput = null;
+    // Field dropdown with sections
+    var fieldLabel = document.createElement('label');
+    fieldLabel.textContent = 'Field *';
+    
+    var fieldDropdownContainer = document.createElement('div');
+    fieldDropdownContainer.className = 'add-field-container';
+    fieldDropdownContainer.style.position = 'relative';
+    
+    var fieldSelectBtn = document.createElement('button');
+    fieldSelectBtn.type = 'button';
+    fieldSelectBtn.className = 'server-input';
+    fieldSelectBtn.style.textAlign = 'left';
+    fieldSelectBtn.style.cursor = 'pointer';
+    fieldSelectBtn.textContent = 'Select a field...';
+    
+    var fieldDropdown = document.createElement('div');
+    fieldDropdown.className = 'add-field-dropdown';
+    fieldDropdown.style.display = 'none';
+    fieldDropdown.style.position = 'absolute';
+    fieldDropdown.style.top = '100%';
+    fieldDropdown.style.left = '0';
+    fieldDropdown.style.right = '0';
+    fieldDropdown.style.zIndex = '1000';
+    fieldDropdown.style.marginTop = '4px';
+    
+    var selectedFieldDef = null;
+    
+    // Render grouped dropdown
+    var sectionOrder = ['General', 'Enum', 'String Constraints', 'Number Constraints', 'Array Constraints', 'Flags'];
+    sectionOrder.forEach(function(section) {
+      if (!fieldsBySection[section] || fieldsBySection[section].length === 0) return;
+      
+      var sectionHeader = document.createElement('div');
+      sectionHeader.className = 'add-field-dropdown-section';
+      sectionHeader.textContent = section;
+      fieldDropdown.appendChild(sectionHeader);
+      
+      fieldsBySection[section].forEach(function(fieldDef) {
+        var option = document.createElement('div');
+        option.className = 'add-field-dropdown-item';
+        option.textContent = fieldDef.label;
+        option.addEventListener('click', function() {
+          selectedFieldDef = fieldDef;
+          fieldSelectBtn.textContent = fieldDef.label;
+          fieldDropdown.style.display = 'none';
+          renderValueInput();
+        });
+        fieldDropdown.appendChild(option);
+      });
+    });
+    
+    fieldSelectBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      fieldDropdown.style.display = fieldDropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    fieldDropdownContainer.appendChild(fieldSelectBtn);
+    fieldDropdownContainer.appendChild(fieldDropdown);
 
-      function renderValueInput() {
-        valueContainer.innerHTML = '';
-        var fieldDef = getFieldDef(fieldSelect.value);
-        if (!fieldDef) return;
+    form.appendChild(fieldLabel);
+    form.appendChild(fieldDropdownContainer);
 
-        if (fieldDef.inputType === 'toggle') {
-          // Checkbox for boolean fields
-          var checkLabel = document.createElement('label');
-          checkLabel.className = 'schema-checkbox-label';
-          var cb = document.createElement('input');
-          cb.type = 'checkbox';
-          checkLabel.appendChild(cb);
-          checkLabel.appendChild(document.createTextNode(' ' + fieldDef.label));
-          valueContainer.appendChild(checkLabel);
-          currentValueInput = cb;
-          valueLabel.textContent = 'Value';
-        } else if (fieldDef.inputType === 'select') {
-          // Select dropdown for format fields
-          var sel = document.createElement('select');
-          sel.className = 'server-input';
-          (fieldDef.options || []).forEach(function(optVal) {
-            var opt = document.createElement('option');
-            opt.value = optVal;
-            opt.textContent = optVal || '(none)';
-            sel.appendChild(opt);
-          });
-          valueContainer.appendChild(sel);
-          currentValueInput = sel;
-          valueLabel.textContent = 'Value';
-        } else if (fieldDef.inputType === 'number') {
-          var numInput = document.createElement('input');
-          numInput.type = 'number';
-          numInput.className = 'server-input';
-          if (fieldDef.placeholder) numInput.placeholder = fieldDef.placeholder;
-          valueContainer.appendChild(numInput);
-          currentValueInput = numInput;
-          valueLabel.textContent = 'Value';
-        } else {
-          // Text input
-          var textInput = document.createElement('input');
-          textInput.type = 'text';
-          textInput.className = 'server-input';
-          if (fieldDef.placeholder) textInput.placeholder = fieldDef.placeholder;
-          valueContainer.appendChild(textInput);
-          currentValueInput = textInput;
-          valueLabel.textContent = 'Value';
-        }
+    // Value input area — changes based on selected field
+    var valueLabel = document.createElement('label');
+    valueLabel.textContent = 'Value';
+    var valueContainer = document.createElement('div');
+    valueContainer.style.minHeight = '38px';
+
+    var currentValueInput = null;
+
+    function renderValueInput() {
+      valueContainer.innerHTML = '';
+      if (!selectedFieldDef) return;
+      var fieldDef = selectedFieldDef;
+
+      if (fieldDef.inputType === 'toggle') {
+        // Checkbox for boolean fields
+        var checkLabel = document.createElement('label');
+        checkLabel.className = 'schema-checkbox-label';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        checkLabel.appendChild(cb);
+        checkLabel.appendChild(document.createTextNode(' ' + fieldDef.label));
+        valueContainer.appendChild(checkLabel);
+        currentValueInput = cb;
+        valueLabel.textContent = 'Value';
+      } else if (fieldDef.inputType === 'select') {
+        // Select dropdown for format fields
+        var sel = document.createElement('select');
+        sel.className = 'server-input';
+        (fieldDef.options || []).forEach(function(optVal) {
+          var opt = document.createElement('option');
+          opt.value = optVal;
+          opt.textContent = optVal || '(none)';
+          sel.appendChild(opt);
+        });
+        valueContainer.appendChild(sel);
+        currentValueInput = sel;
+        valueLabel.textContent = 'Value';
+      } else if (fieldDef.inputType === 'number') {
+        var numInput = document.createElement('input');
+        numInput.type = 'number';
+        numInput.className = 'server-input';
+        if (fieldDef.placeholder) numInput.placeholder = fieldDef.placeholder;
+        valueContainer.appendChild(numInput);
+        currentValueInput = numInput;
+        valueLabel.textContent = 'Value';
+      } else {
+        // Text input
+        var textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'server-input';
+        if (fieldDef.placeholder) textInput.placeholder = fieldDef.placeholder;
+        valueContainer.appendChild(textInput);
+        currentValueInput = textInput;
+        valueLabel.textContent = 'Value';
       }
-
-      fieldSelect.addEventListener('change', renderValueInput);
-      renderValueInput();
-
-      form.appendChild(valueLabel);
-      form.appendChild(valueContainer);
-
-      // Buttons
-      var buttons = document.createElement('div');
-      buttons.className = 'server-dialog-buttons';
-
-      var cancelBtn = document.createElement('button');
-      cancelBtn.className = 'server-dialog-cancel';
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.addEventListener('click', function() { overlay.remove(); });
-
-      var addBtn = document.createElement('button');
-      addBtn.className = 'server-dialog-save';
-      addBtn.textContent = 'Add';
-      addBtn.addEventListener('click', function() {
-        var fieldDef = getFieldDef(fieldSelect.value);
-        if (!fieldDef) return;
-
-        var key = fieldDef.key;
-        var value;
-
-        if (fieldDef.inputType === 'toggle') {
-          value = currentValueInput.checked;
-          currentSchema[key] = value ? true : false;
-        } else if (fieldDef.inputType === 'select') {
-          value = currentValueInput.value;
-          if (value) {
-            currentSchema[key] = value;
-          } else {
-            currentSchema[key] = '';
-          }
-        } else if (key === 'enum') {
-          var rawVal = currentValueInput.value.trim();
-          if (rawVal) {
-            currentSchema.enum = rawVal.split(',').map(function(v) { return v.trim(); }).filter(function(v) { return v; });
-            value = rawVal;
-          } else {
-            currentSchema.enum = [];
-            value = '';
-          }
-        } else if (key === 'example' || key === 'default') {
-          var rawVal = currentValueInput.value.trim();
-          if (rawVal) {
-            try { currentSchema[key] = JSON.parse(rawVal); } catch(e) { currentSchema[key] = rawVal; }
-          } else {
-            currentSchema[key] = '';
-          }
-          value = rawVal;
-        } else if (fieldDef.inputType === 'number') {
-          var numVal = currentValueInput.value.trim();
-          if (numVal !== '') {
-            currentSchema[key] = Number(numVal);
-            value = Number(numVal);
-          } else {
-            currentSchema[key] = 0;
-            value = 0;
-          }
-        } else {
-          value = currentValueInput.value.trim();
-          currentSchema[key] = value || '';
-        }
-
-        // Add the row to the table
-        addRow(fieldDef, value);
-        saveSchema();
-        updateAddFieldBtn();
-        overlay.remove();
-      });
-
-      buttons.appendChild(cancelBtn);
-      buttons.appendChild(addBtn);
-      dialog.appendChild(title);
-      dialog.appendChild(form);
-      dialog.appendChild(buttons);
-      overlay.appendChild(dialog);
-      document.body.appendChild(overlay);
-
-      // Keyboard handling
-      overlay.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') overlay.remove();
-        else if (e.key === 'Enter') addBtn.click();
-      });
-
-      fieldSelect.focus();
     }
+
+    form.appendChild(valueLabel);
+    form.appendChild(valueContainer);
+
+    // Buttons
+    var buttons = document.createElement('div');
+    buttons.className = 'server-dialog-buttons';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'server-dialog-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { overlay.remove(); });
+
+    var addBtn = document.createElement('button');
+    addBtn.className = 'server-dialog-save';
+    addBtn.textContent = 'Add';
+    addBtn.addEventListener('click', function() {
+      if (!selectedFieldDef) return;
+      var fieldDef = selectedFieldDef;
+
+      var key = fieldDef.key;
+      var value;
+
+      if (fieldDef.inputType === 'toggle') {
+        value = currentValueInput.checked;
+        currentSchema[key] = value ? true : false;
+      } else if (fieldDef.inputType === 'select') {
+        value = currentValueInput.value;
+        if (value) {
+          currentSchema[key] = value;
+        } else {
+          currentSchema[key] = '';
+        }
+      } else if (key === 'enum') {
+        var rawVal = currentValueInput.value.trim();
+        if (rawVal) {
+          currentSchema.enum = rawVal.split(',').map(function(v) { return v.trim(); }).filter(function(v) { return v; });
+          value = rawVal;
+        } else {
+          currentSchema.enum = [];
+          value = '';
+        }
+      } else if (key === 'example' || key === 'default') {
+        var rawVal = currentValueInput.value.trim();
+        if (rawVal) {
+          try { currentSchema[key] = JSON.parse(rawVal); } catch(e) { currentSchema[key] = rawVal; }
+        } else {
+          currentSchema[key] = '';
+        }
+        value = rawVal;
+      } else if (fieldDef.inputType === 'number') {
+        var numVal = currentValueInput.value.trim();
+        if (numVal !== '') {
+          currentSchema[key] = Number(numVal);
+          value = Number(numVal);
+        } else {
+          currentSchema[key] = 0;
+          value = 0;
+        }
+      } else {
+        value = currentValueInput.value.trim();
+        currentSchema[key] = value || '';
+      }
+
+      // Add the row to the table
+      addRow(fieldDef, value);
+      saveSchema();
+      updateAddFieldBtn();
+      overlay.remove();
+    });
+
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(addBtn);
+    dialog.appendChild(title);
+    dialog.appendChild(form);
+    dialog.appendChild(buttons);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Close dropdown when clicking elsewhere
+    dialog.addEventListener('click', function(e) {
+      if (!fieldDropdownContainer.contains(e.target)) {
+        fieldDropdown.style.display = 'none';
+      }
+    });
+
+    // Keyboard handling
+    overlay.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') overlay.remove();
+      else if (e.key === 'Enter' && selectedFieldDef) addBtn.click();
+    });
+
+    fieldSelectBtn.focus();
+  }
 
     addFieldBtn.addEventListener('click', function() {
       showAddFieldDialog();
