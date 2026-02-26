@@ -62,6 +62,7 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 - Use TypeScript for all source code.
 - Follow VS Code extension development best practices.
+- every line code modify should only change need to change codes, avoid unnecessary code changes, including space,tab etc.
 - Use the same ui design for webview as the one in the current version of OpenAPI Puer.
 - Keep the code modular and maintainable, with clear separation of concerns between different services and components.
 - Write unit tests for critical services and integration tests for the extension as a whole.
