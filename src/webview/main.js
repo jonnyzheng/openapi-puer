@@ -156,6 +156,27 @@
           S.showSchemaDialog();
         }
         break;
+      case 'updateEndpointData':
+        var activeResponseTabs = {};
+        document.querySelectorAll('.response-item').forEach(function(item) {
+          var statusCode = item.dataset.statusCode;
+          var activeTabBtn = item.querySelector('.response-tab-btn.active');
+          if (statusCode && activeTabBtn && activeTabBtn.dataset.tab) {
+            activeResponseTabs[statusCode] = activeTabBtn.dataset.tab;
+          }
+        });
+        S.currentEndpoint = message.payload.endpoint;
+        S.renderResponsesSection();
+        document.querySelectorAll('.response-item').forEach(function(item) {
+          var statusCode = item.dataset.statusCode;
+          var tab = statusCode ? activeResponseTabs[statusCode] : undefined;
+          if (!tab || tab === 'visual') return;
+          var btn = item.querySelector('.response-tab-btn[data-tab="' + tab + '"]');
+          if (btn instanceof HTMLButtonElement) {
+            btn.click();
+          }
+        });
+        break;
     }
   });
 

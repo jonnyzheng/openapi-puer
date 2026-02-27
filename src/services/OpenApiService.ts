@@ -2792,6 +2792,8 @@ export class OpenApiService {
           return { success: false, message: `Method ${method} not found for path ${endpointPath}` };
         }
 
+        const hadResponsesObject = !!operation.responses;
+
         if (!operation.responses) {
           operation.responses = {};
         }
@@ -2804,8 +2806,33 @@ export class OpenApiService {
         // Replace the entire response object
         operation.responses[statusCode] = sourceJson;
 
-        const updatedContent = JSON.stringify(spec, null, 2);
-        await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+        const currentOrder = this.extractResponseKeyOrder(content, endpointPath, method.toLowerCase()) || [];
+        const orderedEntries: [string, unknown][] = [];
+
+        for (const code of currentOrder) {
+          if (operation.responses[code] !== undefined) {
+            orderedEntries.push([code, operation.responses[code]]);
+          }
+        }
+
+        for (const code of Object.keys(operation.responses)) {
+          if (!orderedEntries.some(([existingCode]) => existingCode === code)) {
+            orderedEntries.push([code, operation.responses[code]]);
+          }
+        }
+
+        const indentMatch = content.match(/\n(\s+)"/);
+        const singleIndent = indentMatch ? indentMatch[1] : '  ';
+        const responsesStr = this.buildOrderedJsonObject(orderedEntries, singleIndent, 5);
+        const updatedContent = this.replaceResponsesBlock(content, endpointPath, method.toLowerCase(), responsesStr);
+        const finalContent = updatedContent || (!hadResponsesObject ? JSON.stringify(spec, null, 2) : null);
+        if (!finalContent) {
+          return { success: false, message: 'Failed to update response in JSON' };
+        }
+
+        JSON.parse(finalContent);
+
+        await fs.promises.writeFile(filePath, finalContent, { encoding: 'utf-8', flag: 'w' });
 
         this.removeFromCache(filePath);
 

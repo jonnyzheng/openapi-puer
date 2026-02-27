@@ -675,6 +675,14 @@ export class ApiPanel {
       payload: { components }
     });
   }
+  public updateEndpointData(endpoint: ApiEndpoint): void {
+    this.currentEndpoint = endpoint;
+    this.postMessage({
+      type: 'updateEndpointData',
+      payload: { endpoint }
+    });
+  }
+
 
   public postMessagePublic(message: WebviewMessage): void {
     this.postMessage(message);

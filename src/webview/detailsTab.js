@@ -2086,7 +2086,6 @@
 
     try {
       const sourceJson = JSON.parse(jsonString);
-
       S.vscode.postMessage({
         type: 'updateResponseSource',
         payload: {
@@ -2098,17 +2097,6 @@
         }
       });
 
-      // Update local state
-      const responseIndex = S.currentEndpoint.responses.findIndex(r => r.statusCode === statusCode);
-      if (responseIndex !== -1) {
-        S.currentEndpoint.responses[responseIndex] = {
-          statusCode,
-          ...sourceJson
-        };
-      }
-
-      // Re-render to show updated content
-      S.renderResponsesSection();
     } catch (e) {
       if (errorContainer) {
         errorContainer.textContent = 'Invalid JSON: ' + e.message;

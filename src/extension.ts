@@ -773,6 +773,11 @@ function registerPanelHandlers(panel: ApiPanel): void {
 
     if (result.success) {
       await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      const updatedEndpoint = updatedFile?.endpoints.find(e => e.path === data.path && e.method === data.method);
+      if (updatedEndpoint) {
+        panel.updateEndpointData(updatedEndpoint);
+      }
     }
   });
 
@@ -1124,7 +1129,14 @@ function setupNewTabHandlers(panel: ApiPanel): void {
   panel.onUpdateResponseSource(async (data) => {
     const result = await openApiService.updateResponseSource(data.filePath, data.path, data.method, data.statusCode, data.sourceJson as Record<string, unknown>);
     panel.notifyOverviewSaved(result.success, result.message);
-    if (result.success) { await refreshApiFiles(); }
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      const updatedEndpoint = updatedFile?.endpoints.find(e => e.path === data.path && e.method === data.method);
+      if (updatedEndpoint) {
+        panel.updateEndpointData(updatedEndpoint);
+      }
+    }
   });
 
   panel.onUpdatePath(async (data) => {
