@@ -137,6 +137,12 @@
         "title": "Open in New Tab",
         "category": "OpenAPI Puer",
         "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "openapi-puer.setupApiFolder",
+        "title": "Setup API Folder",
+        "category": "OpenAPI Puer",
+        "icon": "$(folder-opened)"
       }
     ],
     "menus": {

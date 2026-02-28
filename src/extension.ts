@@ -193,6 +193,64 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const setupApiFolderCommand = vscode.commands.registerCommand('openapi-puer.setupApiFolder', async () => {
+    const workspaceRoot = configService.getWorkspaceRoot();
+    const defaultUri = workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined;
+
+    const folderUri = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: 'Select API Folder',
+      defaultUri,
+      title: 'Select folder for your API documentation'
+    });
+
+    if (!folderUri || folderUri.length === 0) {
+      return;
+    }
+
+    const selectedPath = folderUri[0].fsPath;
+
+    if (!configService.validateAndNotify(selectedPath)) {
+      return;
+    }
+
+    // Validate folder structure
+    const validation = configService.validateFolderStructure(selectedPath);
+
+    if (validation.valid) {
+      // Structure is complete, just save the path
+      await configService.setApiDirectory(selectedPath);
+      configService.setupFileWatcher(selectedPath);
+      openApiService.clearCache();
+      await refreshApiFiles();
+      vscode.window.showInformationMessage(`API folder configured: ${selectedPath}`);
+    } else {
+      // Structure is incomplete, ask to scaffold
+      const choice = await vscode.window.showInformationMessage(
+        "This folder doesn't have the OpenAPI Puer structure. Create it now?",
+        { modal: true },
+        'Create',
+        'Cancel'
+      );
+
+      if (choice === 'Create') {
+        try {
+          await configService.scaffoldFolderStructure(selectedPath);
+          await configService.setApiDirectory(selectedPath);
+          configService.setupFileWatcher(selectedPath);
+          openApiService.clearCache();
+          await refreshApiFiles();
+          vscode.window.showInformationMessage(`API folder configured and scaffolded: ${selectedPath}`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`Failed to scaffold folder: ${message}`);
+        }
+      }
+    }
+  });
+
   const addFolderCommand = vscode.commands.registerCommand('openapi-puer.addFolder', async (item?: ApiTreeItem) => {
     const apiDirectory = configService.getApiDirectory();
     if (!apiDirectory) {
@@ -533,6 +591,7 @@ export function activate(context: vscode.ExtensionContext) {
     selectEnvironmentCommand,
     editEnvironmentCommand,
     setApiFolderCommand,
+    setupApiFolderCommand,
     addFolderCommand,
     addFileCommand,
     deleteItemCommand,

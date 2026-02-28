@@ -1,0 +1,34 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "api sample",
+    "version": "3.1.0",
+    "description": "hello boss"
+  },
+  "servers": [
+    {
+      "url": "http://zz-test.com",
+      "description": "Testing server"
+    },
+    {
+      "url": "https://zz-med.com",
+      "description": "production"
+    },
+    {
+      "url": "https://staging.com",
+      "description": "staging"
+    }
+  ],
+  "paths": {
+    "/machince/{id}": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "get machin list"
+      }
+    }
+  }
+}

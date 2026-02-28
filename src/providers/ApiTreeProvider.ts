@@ -12,6 +12,7 @@ interface FolderNode {
   fullPath: string;
   children: Map<string, FolderNode>;
   files: ApiFile[];
+  readmePath?: string;
 }
 
 export class ApiTreeItem extends vscode.TreeItem {
@@ -131,6 +132,8 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
           // Recursively scan subdirectories
           this.scanDirectoryForFolders(fullPath, childNode);
+        } else if (entry.name.toLowerCase() === 'readme.md') {
+          parentNode.readmePath = path.join(dirPath, entry.name);
         }
       }
     } catch (error) {
@@ -169,9 +172,9 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
   }
 
   private getRootItems(): ApiTreeItem[] {
-    // Return empty array when no API folder is configured to show welcome view
+    // Show onboarding UI when no API folder is configured
     if (!this.apiFolderConfigured) {
-      return [];
+      return this.getOnboardingItems();
     }
 
     if (!this.folderTree) {
@@ -180,6 +183,37 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
     // Return children of root folder directly
     return this.getFolderChildren(this.folderTree);
+  }
+
+  private getOnboardingItems(): ApiTreeItem[] {
+    const items: ApiTreeItem[] = [];
+
+    // Welcome message
+    const welcomeItem = new ApiTreeItem(
+      'Welcome to OpenAPI Puer',
+      vscode.TreeItemCollapsibleState.None,
+      'folder'
+    );
+    welcomeItem.description = 'Get started by selecting your API folder';
+    welcomeItem.iconPath = new vscode.ThemeIcon('info');
+    welcomeItem.contextValue = 'onboarding-welcome';
+    items.push(welcomeItem);
+
+    // Setup button
+    const setupItem = new ApiTreeItem(
+      'Select API Folder',
+      vscode.TreeItemCollapsibleState.None,
+      'folder'
+    );
+    setupItem.iconPath = new vscode.ThemeIcon('folder-opened');
+    setupItem.contextValue = 'onboarding-setup';
+    setupItem.command = {
+      command: 'openapi-puer.setupApiFolder',
+      title: 'Select API Folder'
+    };
+    items.push(setupItem);
+
+    return items;
   }
 
   private getFolderChildren(folderNode: FolderNode): ApiTreeItem[] {
@@ -245,6 +279,25 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
         };
       }
       items.push(item);
+    }
+
+    // Add README.md at the end if it exists
+    if (folderNode.readmePath) {
+      const readmeItem = new ApiTreeItem(
+        'README.md',
+        vscode.TreeItemCollapsibleState.None,
+        'file'
+      );
+      readmeItem.iconPath = new vscode.ThemeIcon('book');
+      readmeItem.contextValue = 'file-readme';
+      readmeItem.resourceUri = vscode.Uri.file(folderNode.readmePath);
+      readmeItem.tooltip = folderNode.readmePath;
+      readmeItem.command = {
+        command: 'vscode.open',
+        title: 'Open README',
+        arguments: [vscode.Uri.file(folderNode.readmePath)]
+      };
+      items.push(readmeItem);
     }
 
     return items;

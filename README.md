@@ -14,10 +14,13 @@ OpenAPI Puer is a Postman-style API development and testing tool for VS Code. It
 ## Quick Start
 
 1. Install the extension in VS Code
-2. Open a workspace that contains OpenAPI JSON files
-3. In the OpenAPI Puer activity bar, click Set API Folder
-4. Select the directory that contains your OpenAPI JSON files
-5. Expand the API Explorer and click an endpoint to open the request panel
+2. Open a workspace
+3. The OpenAPI Puer sidebar shows a welcome screen with a **Select API Folder** button
+4. Click it to choose a folder for your API documentation
+5. If the folder is empty or missing the expected structure, the extension offers to scaffold it automatically
+6. Once configured, expand the API Explorer and click an endpoint to open the request panel
+
+You can also run **OpenAPI Puer: Setup API Folder** from the command palette at any time.
 
 ## OpenAPI Files
 
@@ -25,13 +28,22 @@ OpenAPI Puer is a Postman-style API development and testing tool for VS Code. It
 - Supports OpenAPI 2.0, 3.0, and 3.1
 - Schema-only JSON files are supported if they contain components.schemas
 
+## First-Time Setup
+
+When no API folder is configured, the sidebar displays an onboarding view:
+
+- **Welcome to OpenAPI Puer** message with a description
+- **Select API Folder** button that opens a folder picker
+
+After selecting a folder, the extension validates its structure. If the folder lacks the expected layout (`.openapi-puer/`, `components/`, `paths/`, `api.json`), you are prompted to scaffold it. Scaffolding creates all required directories, default configuration files, and a README.md — without overwriting any existing files.
+
 ## Configuration
 
 Set the API directory in VS Code settings:
 
 - openapi-puer.apiDirectory: Path to the folder containing OpenAPI JSON files
 
-You can also set it from the API Explorer title bar using Set API Folder.
+You can also set it from the API Explorer title bar using Set API Folder, or use the **Setup API Folder** command for the full onboarding flow with automatic scaffolding.
 
 ## Working With APIs
 
