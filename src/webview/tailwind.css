@@ -214,6 +214,26 @@ body {
   border-radius: 4px;
 }
 
+#environment-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#manage-environments-btn {
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+#manage-environments-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
 #main-tabs {
   display: flex;
   gap: 0;
@@ -1077,6 +1097,99 @@ input[type="text"], textarea, select {
 
 input[type="text"]:focus, textarea:focus {
   outline: 1px solid var(--vscode-focusBorder);
+}
+
+.variable-overlay-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.variable-overlay-wrapper .variable-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: pre;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  color: var(--vscode-input-foreground);
+}
+
+.variable-overlay-wrapper.textarea-wrapper .variable-overlay-backdrop {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.variable-overlay-wrapper .variable-overlay-input {
+  position: relative;
+  z-index: 2;
+  background: transparent !important;
+  color: transparent;
+  text-shadow: 0 0 0 var(--vscode-input-foreground);
+  caret-color: var(--vscode-input-foreground);
+}
+
+.variable-token {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 179, 8, 0.25));
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.variable-autocomplete {
+  position: fixed;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.variable-autocomplete.hidden {
+  display: none;
+}
+
+.variable-autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: transparent;
+  color: var(--vscode-foreground);
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.variable-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.variable-autocomplete-item:hover,
+.variable-autocomplete-item.active {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.variable-autocomplete-key {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-weight: 600;
+}
+
+.variable-autocomplete-meta {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.variable-autocomplete-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
 }
 
 #req-query-params-table input, #req-headers-table input, #req-cookies-table input {

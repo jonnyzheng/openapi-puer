@@ -21,9 +21,23 @@
     "api-testing",
     "api-client"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:openapi-puer.environmentsEditor"
+  ],
   "main": "./out/extension.js",
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "openapi-puer.environmentsEditor",
+        "displayName": "OpenAPI Puer Environment Editor",
+        "selector": [
+          {
+            "filenamePattern": "**/.openapi-puer/environments.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "configuration": {
       "title": "OpenAPI Puer",
       "properties": {
@@ -203,6 +217,16 @@
           "command": "openapi-puer.addEndpoint",
           "when": "view == openapi-puer.apiExplorer && viewItem == file",
           "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "2_delete"
         },
         {
           "command": "openapi-puer.viewSourceCode",

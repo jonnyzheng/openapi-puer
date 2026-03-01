@@ -48,6 +48,22 @@
       btn.addEventListener('click', () => S.switchTab(btn.dataset.tab));
     });
 
+    const environmentSelect = document.getElementById('environment-select');
+    if (environmentSelect) {
+      environmentSelect.addEventListener('change', () => {
+        if (typeof S.handleEnvironmentSelectionChange === 'function') {
+          S.handleEnvironmentSelectionChange(environmentSelect.value);
+        }
+      });
+    }
+
+    const manageEnvironmentsBtn = document.getElementById('manage-environments-btn');
+    if (manageEnvironmentsBtn) {
+      manageEnvironmentsBtn.addEventListener('click', () => {
+        S.vscode.postMessage({ type: 'openEnvironmentManager' });
+      });
+    }
+
     prettyPrint.addEventListener('change', () => S.updateResponseBody());
     wordWrap.addEventListener('change', () => {
       document.getElementById('response-body').classList.toggle('word-wrap', wordWrap.checked);
@@ -125,6 +141,11 @@
         break;
       case 'updateEnvironments':
         S.updateEnvironments(message.payload.environments, message.payload.activeId);
+        break;
+      case 'updateEnvironmentVariables':
+        if (typeof S.updateEnvironmentVariables === 'function') {
+          S.updateEnvironmentVariables(message.payload.variables || [], message.payload.activeBaseUrl || '');
+        }
         break;
       case 'overviewSaved':
         S.showSaveStatus(message.payload.success, message.payload.message);

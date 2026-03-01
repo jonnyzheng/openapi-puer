@@ -6,7 +6,9 @@ import { HttpService } from './services/HttpService';
 import { EnvironmentService } from './services/EnvironmentService';
 import { ApiTreeProvider, ApiTreeItem, ApiTreeDragAndDropController, OPENAPI_PUER_TREE_MIME_TYPE } from './providers/ApiTreeProvider';
 import { ApiPanel } from './panels/ApiPanel';
+import { EnvironmentEditorProvider } from './panels/EnvironmentEditorProvider';
 import { ApiEndpoint, ApiFile } from './models/types';
+import { OPENAPI_DROPDOWN_VERSIONS } from './services/OpenApiVersionPolicy';
 
 let openApiService: OpenApiService;
 let configService: ConfigService;
@@ -25,6 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
   configService = new ConfigService();
   httpService = new HttpService();
   environmentService = new EnvironmentService(context);
+  const environmentEditorProvider = EnvironmentEditorProvider.register(context, environmentService);
   treeProvider = new ApiTreeProvider();
 
   // Create drag and drop controller
@@ -321,7 +324,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     if (fileName) {
-      const result = await openApiService.createFile(parentPath, fileName.trim());
+      const result = await openApiService.createFile(parentPath, fileName.trim(), apiDirectory);
       if (result.success) {
         vscode.window.showInformationMessage(`File "${fileName}.json" created`);
         await refreshApiFiles();
@@ -573,6 +576,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle environment changes
   environmentService.onEnvironmentsChange(() => {
+    updateStatusBar();
     updatePanelEnvironments();
   });
 
@@ -606,6 +610,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: () => openApiService.dispose() },
     { dispose: () => configService.dispose() },
     { dispose: () => environmentService.dispose() },
+    environmentEditorProvider,
     { dispose: () => treeProvider.dispose() }
   );
 }
@@ -665,6 +670,15 @@ function registerPanelHandlers(panel: ApiPanel): void {
     } finally {
       panel.showLoading(false);
     }
+  });
+
+  panel.onSetActiveEnvironment(async (data) => {
+    const nextId = typeof data.id === 'string' && data.id.trim() ? data.id : undefined;
+    await environmentService.setActiveEnvironment(nextId);
+  });
+
+  panel.onOpenEnvironmentManager(async () => {
+    await openEnvironmentManagerFile();
   });
 
   // Handle update overview
@@ -1061,15 +1075,24 @@ function registerPanelHandlers(panel: ApiPanel): void {
   });
 }
 
+function getOpenApiVersionValue(apiFile: ApiFile): string | undefined {
+  const rawSpec = apiFile.spec as { openapi?: unknown };
+  return typeof rawSpec.openapi === 'string' ? rawSpec.openapi : undefined;
+}
+
 function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const panel = ApiPanel.createOrShow(context.extensionUri);
+  const isCanonicalApiFile = apiFile.fileName.toLowerCase() === 'api.json';
 
   panel.showApiFile({
     filePath: apiFile.filePath,
     title: apiFile.title,
     description: apiFile.description,
     version: apiFile.version,
+    openapiVersion: getOpenApiVersionValue(apiFile),
     infoVersion: apiFile.spec?.info?.version,
+    isCanonicalApiFile,
+    supportedOpenApiVersions: OPENAPI_DROPDOWN_VERSIONS,
     servers: apiFile.servers || [],
     spec: apiFile.spec
   });
@@ -1090,12 +1113,41 @@ function updateStatusBar(): void {
 
 function updatePanelEnvironments(): void {
   if (ApiPanel.currentPanel) {
-    const environments = environmentService.getEnvironments().map(e => ({
-      id: e.id,
-      name: e.name
-    }));
-    ApiPanel.currentPanel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
+    syncPanelEnvironments(ApiPanel.currentPanel);
   }
+}
+
+function syncPanelEnvironments(panel: ApiPanel): void {
+  const environments = environmentService.getEnvironments().map(e => ({
+    id: e.id,
+    name: e.name
+  }));
+  const activeEnvironment = environmentService.getActiveEnvironment();
+  panel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
+  panel.updateEnvironmentVariables(activeEnvironment?.variables || [], activeEnvironment?.baseUrl);
+}
+
+async function openEnvironmentManagerFile(): Promise<void> {
+  const workspaceRoot = configService.getWorkspaceRoot();
+  if (!workspaceRoot) {
+    vscode.window.showWarningMessage('Open a workspace folder to manage environments.');
+    return;
+  }
+
+  const openapiPuerDirUri = vscode.Uri.file(path.join(workspaceRoot, '.openapi-puer'));
+  const environmentsFileUri = vscode.Uri.file(path.join(workspaceRoot, '.openapi-puer', 'environments.json'));
+
+  await vscode.workspace.fs.createDirectory(openapiPuerDirUri);
+
+  try {
+    await vscode.workspace.fs.stat(environmentsFileUri);
+  } catch {
+    const environments = environmentService.getEnvironments();
+    const content = JSON.stringify({ environments }, null, 2);
+    await vscode.workspace.fs.writeFile(environmentsFileUri, Buffer.from(content, 'utf-8'));
+  }
+
+  await vscode.commands.executeCommand('vscode.open', environmentsFileUri);
 }
 
 export function deactivate() {
@@ -1115,6 +1167,15 @@ function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile)
 }
 
 function setupNewTabHandlers(panel: ApiPanel): void {
+  panel.onSetActiveEnvironment(async (data) => {
+    const nextId = typeof data.id === 'string' && data.id.trim() ? data.id : undefined;
+    await environmentService.setActiveEnvironment(nextId);
+  });
+
+  panel.onOpenEnvironmentManager(async () => {
+    await openEnvironmentManagerFile();
+  });
+
   panel.onSendRequest(async (config) => {
     panel.showLoading(true);
     try {
@@ -1334,22 +1395,28 @@ function openEndpointInNewTab(context: vscode.ExtensionContext, endpoint: ApiEnd
 
   panel.showEndpoint(endpoint, servers, components);
   setupNewTabHandlers(panel);
+  syncPanelEnvironments(panel);
 }
 
 function openApiFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const title = apiFile.title || apiFile.fileName;
   const panel = ApiPanel.createNew(context.extensionUri, title);
+  const isCanonicalApiFile = apiFile.fileName.toLowerCase() === 'api.json';
 
   panel.showApiFile({
     filePath: apiFile.filePath,
     title: apiFile.title,
     description: apiFile.description,
     version: apiFile.version,
+    openapiVersion: getOpenApiVersionValue(apiFile),
     infoVersion: apiFile.spec?.info?.version,
+    isCanonicalApiFile,
+    supportedOpenApiVersions: OPENAPI_DROPDOWN_VERSIONS,
     servers: apiFile.servers || [],
     spec: apiFile.spec
   });
   setupNewTabHandlers(panel);
+  syncPanelEnvironments(panel);
 }
 
 function openSchemaFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
@@ -1362,4 +1429,5 @@ function openSchemaFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFi
     components: apiFile.components || {}
   });
   setupNewTabHandlers(panel);
+  syncPanelEnvironments(panel);
 }

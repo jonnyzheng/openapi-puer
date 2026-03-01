@@ -242,28 +242,36 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
     // Add files (sorted alphabetically)
     const sortedFiles = [...folderNode.files].sort((a, b) =>
-      (a.title || a.fileName).localeCompare(b.title || b.fileName)
+      a.fileName.localeCompare(b.fileName)
     );
 
     for (const file of sortedFiles) {
-      const isApiJson = file.fileName.toLowerCase() === 'api.json';
-      const isComponentFile = !isApiJson && file.endpoints.length === 0 && !!file.components;
+      const isParseErrorFile = !!file.parseError;
+      const isApiJson = !isParseErrorFile && file.fileName.toLowerCase() === 'api.json';
+      const isComponentFile = !isParseErrorFile && !isApiJson && file.endpoints.length === 0 && !!file.components;
       const hasSchemas = isComponentFile && !!file.components?.schemas && Object.keys(file.components.schemas).length > 0;
       const hasParameters = isComponentFile && !!file.components?.parameters && Object.keys(file.components.parameters).length > 0;
       const isParameterOnlyFile = isComponentFile && !hasSchemas && hasParameters;
       const item = new ApiTreeItem(
-        file.title || file.fileName,
-        (isApiJson || isComponentFile) ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
+        file.fileName,
+        (isApiJson || isComponentFile || isParseErrorFile) ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
         'file',
         file
       );
-      item.tooltip = file.description || file.filePath;
+      item.tooltip = isParseErrorFile ? `${file.filePath}\n\n${file.parseError}` : (file.description || file.filePath);
       item.iconPath = new vscode.ThemeIcon(
-        isParameterOnlyFile ? 'symbol-parameter' : isComponentFile ? 'symbol-class' : 'file-code'
+        isParseErrorFile ? 'warning' : isParameterOnlyFile ? 'symbol-parameter' : isComponentFile ? 'symbol-class' : 'file-code'
       );
       item.resourceUri = vscode.Uri.file(file.filePath);
       // Set special contextValue for api.json files
-      if (isApiJson) {
+      if (isParseErrorFile) {
+        item.contextValue = 'file-error';
+        item.command = {
+          command: 'vscode.open',
+          title: 'Open File',
+          arguments: [vscode.Uri.file(file.filePath)]
+        };
+      } else if (isApiJson) {
         item.contextValue = 'file-api';
         item.command = {
           command: 'openapi-puer.openApiFile',

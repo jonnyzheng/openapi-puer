@@ -31,7 +31,7 @@ suite('ConfigService Test Suite', () => {
       fs.mkdirSync(path.join(tempDir, 'components', 'requestBodies'), { recursive: true });
       fs.mkdirSync(path.join(tempDir, 'components', 'schemas'), { recursive: true });
       fs.mkdirSync(path.join(tempDir, 'paths'), { recursive: true });
-      fs.writeFileSync(path.join(tempDir, 'api.json'), '{}');
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.1.1' }, null, 2));
 
       const result = service.validateFolderStructure(tempDir);
 
@@ -78,6 +78,38 @@ suite('ConfigService Test Suite', () => {
       assert.ok(result.missing.includes('components/requestBodies/'));
       assert.ok(result.missing.includes('components/schemas/'));
     });
+
+    test('should report missing openapi version in api.json', () => {
+      fs.mkdirSync(path.join(tempDir, '.openapi-puer'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, '.openapi-puer', 'environments.json'), '{"environments":[]}');
+      fs.mkdirSync(path.join(tempDir, 'components', 'parameters'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'responses'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'requestBodies'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'schemas'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'paths'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ info: { title: 'X', version: '1.0.0' }, paths: {} }, null, 2));
+
+      const result = service.validateFolderStructure(tempDir);
+
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.missing.includes('api.json.openapi'));
+    });
+
+    test('should report unsupported openapi version in api.json', () => {
+      fs.mkdirSync(path.join(tempDir, '.openapi-puer'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, '.openapi-puer', 'environments.json'), '{"environments":[]}');
+      fs.mkdirSync(path.join(tempDir, 'components', 'parameters'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'responses'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'requestBodies'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'components', 'schemas'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'paths'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.3.0' }, null, 2));
+
+      const result = service.validateFolderStructure(tempDir);
+
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.missing.includes('api.json.openapi'));
+    });
   });
 
   suite('scaffoldFolderStructure', () => {
@@ -99,11 +131,20 @@ suite('ConfigService Test Suite', () => {
 
       // Verify environments.json content
       const envContent = JSON.parse(fs.readFileSync(path.join(tempDir, '.openapi-puer', 'environments.json'), 'utf-8'));
-      assert.deepStrictEqual(envContent, { environments: [] });
+      assert.ok(Array.isArray(envContent.environments));
+      assert.strictEqual(envContent.environments.length, 1);
+      const [defaultEnvironment] = envContent.environments;
+      assert.strictEqual(defaultEnvironment.id, 'env_default');
+      assert.strictEqual(defaultEnvironment.name, 'Default');
+      assert.strictEqual(defaultEnvironment.baseUrl, '');
+      assert.strictEqual(defaultEnvironment.description, '');
+      assert.deepStrictEqual(defaultEnvironment.variables, []);
+      assert.ok(typeof defaultEnvironment.createdAt === 'string');
+      assert.ok(typeof defaultEnvironment.updatedAt === 'string');
 
       // Verify api.json content
       const apiContent = JSON.parse(fs.readFileSync(path.join(tempDir, 'api.json'), 'utf-8'));
-      assert.strictEqual(apiContent.openapi, '3.0.3');
+      assert.strictEqual(apiContent.openapi, '3.1.1');
       assert.strictEqual(apiContent.info.title, 'My API');
       assert.strictEqual(apiContent.info.version, '1.0.0');
 
@@ -112,6 +153,9 @@ suite('ConfigService Test Suite', () => {
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'header.json')));
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'path.json')));
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'query.json')));
+
+      const parameterContent = JSON.parse(fs.readFileSync(path.join(tempDir, 'components', 'parameters', 'query.json'), 'utf-8'));
+      assert.strictEqual(parameterContent.openapi, '3.1.1');
     });
 
     test('should not overwrite existing files in folders with existing content', async () => {
@@ -184,6 +228,15 @@ suite('ConfigService Test Suite', () => {
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'cookie.json')));
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'header.json')));
       assert.ok(fs.existsSync(path.join(tempDir, 'components', 'parameters', 'query.json')));
+    });
+
+    test('should align generated parameter files with existing api.json openapi version', async () => {
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.0.3' }, null, 2));
+
+      await service.scaffoldFolderStructure(tempDir);
+
+      const parameterContent = JSON.parse(fs.readFileSync(path.join(tempDir, 'components', 'parameters', 'cookie.json'), 'utf-8'));
+      assert.strictEqual(parameterContent.openapi, '3.0.3');
     });
   });
 

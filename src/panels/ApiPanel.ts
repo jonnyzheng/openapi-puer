@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ApiEndpoint, HttpResponse, RequestConfig, WebviewMessage, SchemaObject, ServerInfo } from '../models/types';
+import {
+  ApiEndpoint,
+  HttpResponse,
+  RequestConfig,
+  WebviewMessage,
+  SchemaObject,
+  ServerInfo,
+  EnvironmentVariable
+} from '../models/types';
 
 export class ApiPanel {
   public static currentPanel: ApiPanel | undefined;
@@ -13,6 +21,12 @@ export class ApiPanel {
   private currentEndpoint: ApiEndpoint | undefined;
   private onSendRequestEmitter = new vscode.EventEmitter<RequestConfig>();
   readonly onSendRequest = this.onSendRequestEmitter.event;
+
+  private onSetActiveEnvironmentEmitter = new vscode.EventEmitter<{ id?: string }>();
+  readonly onSetActiveEnvironment = this.onSetActiveEnvironmentEmitter.event;
+
+  private onOpenEnvironmentManagerEmitter = new vscode.EventEmitter<void>();
+  readonly onOpenEnvironmentManager = this.onOpenEnvironmentManagerEmitter.event;
 
   private _webviewReady: boolean = false;
   private _messageQueue: WebviewMessage[] = [];
@@ -172,6 +186,7 @@ export class ApiPanel {
       title?: string;
       description?: string;
       version?: string;
+      openapiVersion?: string;
     };
   }>();
   readonly onUpdateApiInfo = this.onUpdateApiInfoEmitter.event;
@@ -374,6 +389,21 @@ export class ApiPanel {
     });
   }
 
+  public updateEnvironmentVariables(variables: EnvironmentVariable[], activeBaseUrl?: string): void {
+    this.postMessage({
+      type: 'updateEnvironmentVariables',
+      payload: {
+        variables: variables.map((variable) => ({
+          key: variable.key,
+          description: variable.description,
+          isSecret: variable.isSecret,
+          type: variable.type
+        })),
+        activeBaseUrl: activeBaseUrl || ''
+      }
+    });
+  }
+
   public showAddServerDialog(
     filePath: string,
     servers: { url: string; description?: string }[]
@@ -390,7 +420,10 @@ export class ApiPanel {
     title?: string;
     description?: string;
     version: string;
+    openapiVersion?: string;
     infoVersion?: string;
+    isCanonicalApiFile?: boolean;
+    supportedOpenApiVersions?: ReadonlyArray<string>;
     servers: ServerInfo[];
     spec?: unknown;
   }): void {
@@ -417,6 +450,12 @@ export class ApiPanel {
     switch (message.type) {
       case 'sendRequest':
         this.onSendRequestEmitter.fire(message.payload as RequestConfig);
+        break;
+      case 'setActiveEnvironment':
+        this.onSetActiveEnvironmentEmitter.fire(message.payload as { id?: string });
+        break;
+      case 'openEnvironmentManager':
+        this.onOpenEnvironmentManagerEmitter.fire();
         break;
       case 'updateOverview':
         this.onUpdateOverviewEmitter.fire(message.payload as {
@@ -571,6 +610,7 @@ export class ApiPanel {
             title?: string;
             description?: string;
             version?: string;
+            openapiVersion?: string;
           };
         });
         break;
@@ -769,6 +809,7 @@ export class ApiPanel {
         <select id="environment-select">
           <option value="">No Environment</option>
         </select>
+        <button id="manage-environments-btn" type="button">Manage</button>
       </div>
     </div>
 
@@ -977,6 +1018,8 @@ export class ApiPanel {
     }
 
     this.onSendRequestEmitter.dispose();
+    this.onSetActiveEnvironmentEmitter.dispose();
+    this.onOpenEnvironmentManagerEmitter.dispose();
     this.onUpdateOverviewEmitter.dispose();
     this.onUpdateParameterEmitter.dispose();
     this.onAddParameterEmitter.dispose();

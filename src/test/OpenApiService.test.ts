@@ -17,12 +17,8 @@ suite('OpenApiService Test Suite', () => {
 
   teardown(() => {
     service.dispose();
-    // Clean up temp files
-    if (fs.existsSync(testFilePath)) {
-      fs.unlinkSync(testFilePath);
-    }
     if (fs.existsSync(tempDir)) {
-      fs.rmdirSync(tempDir);
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
@@ -835,6 +831,62 @@ suite('OpenApiService Test Suite', () => {
       assert.strictEqual(updatedSpec.info.description, undefined);
       assert.strictEqual(updatedSpec.info.version, undefined);
     });
+
+    test('should update canonical openapi version when provided', async () => {
+      const apiJsonPath = path.join(tempDir, 'api.json');
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Original API', version: '1.0.0' },
+        paths: {}
+      };
+      fs.writeFileSync(apiJsonPath, JSON.stringify(spec, null, 2));
+
+      const result = await service.updateApiInfo(apiJsonPath, {
+        openapiVersion: '3.2.0'
+      });
+
+      assert.strictEqual(result.success, true);
+
+      const updatedSpec = JSON.parse(fs.readFileSync(apiJsonPath, 'utf-8'));
+      assert.strictEqual(updatedSpec.openapi, '3.2.0');
+      assert.strictEqual(updatedSpec.info.version, '1.0.0');
+    });
+
+    test('should fail when openapi version is unsupported', async () => {
+      const apiJsonPath = path.join(tempDir, 'api.json');
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'Original API', version: '1.0.0' },
+        paths: {}
+      };
+      fs.writeFileSync(apiJsonPath, JSON.stringify(spec, null, 2));
+
+      const result = await service.updateApiInfo(apiJsonPath, {
+        openapiVersion: '3.3.0'
+      });
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.message?.includes('Unsupported OpenAPI version'));
+
+      const unchangedSpec = JSON.parse(fs.readFileSync(apiJsonPath, 'utf-8'));
+      assert.strictEqual(unchangedSpec.openapi, '3.1.1');
+    });
+
+    test('should fail when updating openapi version on non-api.json files', async () => {
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'Original API', version: '1.0.0' },
+        paths: {}
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const result = await service.updateApiInfo(testFilePath, {
+        openapiVersion: '3.2.0'
+      });
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.message?.includes('main api.json'));
+    });
   });
 
   suite('addResponse', () => {
@@ -1536,6 +1588,213 @@ suite('OpenApiService Test Suite', () => {
 
       assert.strictEqual(result.success, false);
       assert.ok(result.message?.includes('Method post not found for path /users'));
+    });
+  });
+
+  suite('parseFile', () => {
+    test('should parse non-versioned path file with info and paths', async () => {
+      const nonVersionedPathFile = {
+        info: {
+          title: 'users',
+          version: '1.0.0',
+          description: ''
+        },
+        paths: {}
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(nonVersionedPathFile, null, 2));
+
+      const parsed = await service.parseFile(testFilePath);
+
+      assert.ok(parsed);
+      assert.strictEqual(parsed?.title, 'users');
+      assert.strictEqual(parsed?.version, '3.0');
+      assert.deepStrictEqual(parsed?.endpoints, []);
+    });
+
+    test('should classify OpenAPI 3.2 files as version 3.2', async () => {
+      const spec = {
+        openapi: '3.2.0',
+        info: {
+          title: 'users',
+          version: '1.0.0',
+          description: ''
+        },
+        paths: {}
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const parsed = await service.parseFile(testFilePath);
+
+      assert.ok(parsed);
+      assert.strictEqual(parsed?.version, '3.2');
+    });
+
+    test('should reject files with unsupported explicit openapi versions', async () => {
+      const spec = {
+        openapi: '3.3.0',
+        info: {
+          title: 'users',
+          version: '1.0.0',
+          description: ''
+        },
+        paths: {}
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const parsed = await service.parseFile(testFilePath);
+
+      assert.strictEqual(parsed, null);
+    });
+  });
+
+  suite('scanDirectory', () => {
+    test('should include unparseable files with parseError metadata', async () => {
+      const validFilePath = path.join(tempDir, 'valid.json');
+      const invalidFilePath = path.join(tempDir, 'invalid.json');
+
+      fs.writeFileSync(validFilePath, JSON.stringify({
+        info: {
+          title: 'valid',
+          version: '1.0.0',
+          description: ''
+        },
+        paths: {}
+      }, null, 2));
+      fs.writeFileSync(invalidFilePath, '{ invalid-json');
+
+      const scannedFiles = await service.scanDirectory(tempDir);
+      const validFile = scannedFiles.find((file) => file.fileName === 'valid.json');
+      const invalidFile = scannedFiles.find((file) => file.fileName === 'invalid.json');
+
+      assert.ok(validFile);
+      assert.strictEqual(validFile?.parseError, undefined);
+
+      assert.ok(invalidFile);
+      assert.ok(invalidFile?.parseError?.includes('Invalid JSON'));
+    });
+  });
+
+  suite('createFile', () => {
+    test('should create OpenAPI template for regular folders', async () => {
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.1.1' }, null, 2));
+      const result = await service.createFile(tempDir, 'test-api');
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.path, testFilePath);
+
+      const created = JSON.parse(fs.readFileSync(testFilePath, 'utf-8'));
+      assert.strictEqual(created.openapi, '3.1.1');
+      assert.deepStrictEqual(created.paths, {});
+    });
+
+    test('should bootstrap main api.json with default version when missing', async () => {
+      const result = await service.createFile(tempDir, 'api');
+      const apiJsonPath = path.join(tempDir, 'api.json');
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.path, apiJsonPath);
+
+      const created = JSON.parse(fs.readFileSync(apiJsonPath, 'utf-8'));
+      assert.strictEqual(created.openapi, '3.1.1');
+      assert.deepStrictEqual(created.paths, {});
+    });
+
+    test('should fail to create files when api.json is missing', async () => {
+      const result = await service.createFile(tempDir, 'test-api');
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.message?.includes('api.json not found'));
+      assert.strictEqual(fs.existsSync(testFilePath), false);
+    });
+
+    test('should fail to create files when api.json openapi is unsupported', async () => {
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.3.0' }, null, 2));
+
+      const result = await service.createFile(tempDir, 'test-api');
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.message?.includes('Unsupported OpenAPI version'));
+      assert.strictEqual(fs.existsSync(testFilePath), false);
+    });
+
+    test('should create requestBodies template in components/requestBodies folder', async () => {
+      const requestBodiesDir = path.join(tempDir, 'components', 'requestBodies');
+      fs.mkdirSync(requestBodiesDir, { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.2.0' }, null, 2));
+
+      try {
+        const result = await service.createFile(requestBodiesDir, 'empty-body');
+        const requestBodiesFilePath = path.join(requestBodiesDir, 'empty-body.json');
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.path, requestBodiesFilePath);
+
+        const created = JSON.parse(fs.readFileSync(requestBodiesFilePath, 'utf-8'));
+        assert.deepStrictEqual(created, {
+          openapi: '3.2.0',
+          requestBodies: {}
+        });
+
+        const parsedFile = await service.parseFile(requestBodiesFilePath);
+        assert.ok(parsedFile);
+        assert.ok(parsedFile?.components?.requestBodies);
+      } finally {
+        fs.rmSync(path.join(tempDir, 'components'), { recursive: true, force: true });
+      }
+    });
+
+    test('should create components.schemas template in components/schemas folder', async () => {
+      const schemasDir = path.join(tempDir, 'components', 'schemas');
+      fs.mkdirSync(schemasDir, { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.1.1' }, null, 2));
+
+      try {
+        const result = await service.createFile(schemasDir, 'empty-schema');
+        const schemaFilePath = path.join(schemasDir, 'empty-schema.json');
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.path, schemaFilePath);
+
+        const created = JSON.parse(fs.readFileSync(schemaFilePath, 'utf-8'));
+        assert.deepStrictEqual(created, {
+          openapi: '3.1.1',
+          components: {
+            schemas: {}
+          }
+        });
+
+        const parsedFile = await service.parseFile(schemaFilePath);
+        assert.ok(parsedFile);
+        assert.ok(parsedFile?.components?.schemas);
+      } finally {
+        fs.rmSync(path.join(tempDir, 'components'), { recursive: true, force: true });
+      }
+    });
+
+    test('should create responses template in components/responses folder', async () => {
+      const responsesDir = path.join(tempDir, 'components', 'responses');
+      fs.mkdirSync(responsesDir, { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.0.3' }, null, 2));
+
+      try {
+        const result = await service.createFile(responsesDir, 'empty-response');
+        const responsesFilePath = path.join(responsesDir, 'empty-response.json');
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.path, responsesFilePath);
+
+        const created = JSON.parse(fs.readFileSync(responsesFilePath, 'utf-8'));
+        assert.deepStrictEqual(created, {
+          openapi: '3.0.3',
+          responses: {}
+        });
+
+        const parsedFile = await service.parseFile(responsesFilePath);
+        assert.ok(parsedFile);
+        assert.ok(parsedFile?.components?.responses);
+      } finally {
+        fs.rmSync(path.join(tempDir, 'components'), { recursive: true, force: true });
+      }
     });
   });
 });

@@ -5,7 +5,8 @@ export interface ApiFile {
   fileName: string;
   spec: OpenAPI.Document;
   endpoints: ApiEndpoint[];
-  version: '2.0' | '3.0' | '3.1';
+  version: '3.0' | '3.1' | '3.2';
+  parseError?: string;
   title?: string;
   description?: string;
   servers?: ServerInfo[];
@@ -115,6 +116,8 @@ export interface ApiResponse {
 export interface Environment {
   id: string;
   name: string;
+  baseUrl?: string;
+  description?: string;
   variables: EnvironmentVariable[];
   createdAt: string;
   updatedAt: string;
@@ -125,6 +128,7 @@ export interface EnvironmentVariable {
   value: string;
   description?: string;
   isSecret?: boolean;
+  type?: 'text' | 'secret' | 'url';
 }
 
 export interface RequestConfig {

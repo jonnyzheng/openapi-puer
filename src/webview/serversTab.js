@@ -368,6 +368,25 @@
     S.currentServers = payload.servers || [];
 
     const escapeHtml = S.escapeHtml;
+    const currentOpenApiVersion = payload.isCanonicalApiFile
+      ? (payload.openapiVersion || '3.1.1')
+      : (payload.openapiVersion || payload.version || '');
+    const supportedOpenApiVersions = Array.isArray(payload.supportedOpenApiVersions)
+      ? payload.supportedOpenApiVersions.slice()
+      : ['3.0.3', '3.1.1', '3.2.0'];
+    if (currentOpenApiVersion && supportedOpenApiVersions.indexOf(currentOpenApiVersion) === -1) {
+      supportedOpenApiVersions.unshift(currentOpenApiVersion);
+    }
+
+    const openApiVersionFieldHtml = payload.isCanonicalApiFile
+      ? '<select id="api-openapi-version" class="api-info-input">'
+        + supportedOpenApiVersions.map(function(versionOption) {
+          var selected = versionOption === currentOpenApiVersion ? ' selected' : '';
+          return '<option value="' + escapeHtml(versionOption) + '"' + selected + '>' + escapeHtml(versionOption) + '</option>';
+        }).join('')
+        + '</select>'
+      : '<input type="text" id="api-openapi-version" class="api-info-input" value="' + escapeHtml(currentOpenApiVersion) + '" disabled />';
+
     const container = document.getElementById('app');
     if (!container) return;
 
@@ -406,7 +425,7 @@
                   </div>
                   <div class="api-info-field">
                     <label>OpenAPI Version</label>
-                    <input type="text" class="api-info-input" value="${escapeHtml(payload.version)}" disabled />
+                    ${openApiVersionFieldHtml}
                   </div>
                 </div>
               </div>
@@ -460,17 +479,24 @@
     var titleInput = document.getElementById('api-info-title');
     var descInput = document.getElementById('api-info-description');
     var versionInput = document.getElementById('api-info-version');
+    var openApiVersionInput = document.getElementById('api-openapi-version');
 
     function saveApiInfo() {
+      var updates = {
+        title: titleInput.value,
+        description: descInput.value,
+        version: versionInput.value
+      };
+
+      if (payload.isCanonicalApiFile && openApiVersionInput) {
+        updates.openapiVersion = openApiVersionInput.value;
+      }
+
       S.vscode.postMessage({
         type: 'updateApiInfo',
         payload: {
           filePath: S.currentFilePath,
-          updates: {
-            title: titleInput.value,
-            description: descInput.value,
-            version: versionInput.value
-          }
+          updates: updates
         }
       });
     }
@@ -478,6 +504,9 @@
     titleInput.addEventListener('change', saveApiInfo);
     descInput.addEventListener('change', saveApiInfo);
     versionInput.addEventListener('change', saveApiInfo);
+    if (payload.isCanonicalApiFile && openApiVersionInput) {
+      openApiVersionInput.addEventListener('change', saveApiInfo);
+    }
 
     // Render server list
     S.renderServerList();

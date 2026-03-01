@@ -15,10 +15,21 @@ import {
   ServerInfo,
   MediaTypeObject
 } from '../models/types';
+import {
+  DEFAULT_OPENAPI_VERSION,
+  getOpenApiVersionFamily,
+  getOpenApiVersionValidationError,
+  isSupportedOpenApiVersion
+} from './OpenApiVersionPolicy';
 
 interface CacheEntry {
   mtime: number;
   apiFile: ApiFile;
+}
+
+interface ParseFileResult {
+  apiFile: ApiFile | null;
+  parseError?: string;
 }
 
 export class OpenApiService {
@@ -46,13 +57,13 @@ export class OpenApiService {
     }
   }
 
-  async parseFile(filePath: string): Promise<ApiFile | null> {
+  private async parseFileWithResult(filePath: string): Promise<ParseFileResult> {
     try {
       const stat = fs.statSync(filePath);
       const cached = this.cache.get(filePath);
 
       if (cached && cached.mtime === stat.mtimeMs) {
-        return cached.apiFile;
+        return { apiFile: cached.apiFile };
       }
 
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -62,14 +73,19 @@ export class OpenApiService {
         parsed = JSON.parse(content);
       } catch {
         this.outputChannel.appendLine(`Failed to parse ${filePath}: Invalid JSON`);
-        return null;
+        return { apiFile: null, parseError: 'Invalid JSON' };
       }
 
       if (!this.isOpenApiSpec(parsed)) {
         if (this.isSchemaFile(parsed)) {
-          return this.parseSchemaFile(filePath, parsed as Record<string, unknown>, stat.mtimeMs);
+          return {
+            apiFile: this.parseSchemaFile(filePath, parsed as Record<string, unknown>, stat.mtimeMs)
+          };
         }
-        return null;
+        return {
+          apiFile: null,
+          parseError: 'File is not a supported OpenAPI or component schema document.'
+        };
       }
 
       // Use bundle() instead of validate() to keep $ref references intact
@@ -97,26 +113,48 @@ export class OpenApiService {
       };
 
       this.cache.set(filePath, { mtime: stat.mtimeMs, apiFile });
-      return apiFile;
+      return { apiFile };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Error parsing ${filePath}: ${message}`);
-      return null;
+      return { apiFile: null, parseError: message };
     }
   }
 
+  async parseFile(filePath: string): Promise<ApiFile | null> {
+    const result = await this.parseFileWithResult(filePath);
+    return result.apiFile;
+  }
+
+  private createParseErrorApiFile(filePath: string, parseError: string): ApiFile {
+    return {
+      filePath,
+      fileName: path.basename(filePath),
+      spec: {} as OpenAPI.Document,
+      endpoints: [],
+      version: '3.0',
+      parseError
+    };
+  }
+
   private parseSchemaFile(filePath: string, parsed: Record<string, unknown>, mtimeMs: number): ApiFile {
-    const components = parsed.components as Record<string, Record<string, unknown>>;
+    const components = parsed.components as Record<string, Record<string, unknown>> | undefined;
+    const responses = (parsed.responses as Record<string, unknown> | undefined)
+      || (components?.responses as Record<string, unknown> | undefined);
+    const requestBodies = (parsed.requestBodies as Record<string, unknown> | undefined)
+      || (components?.requestBodies as Record<string, unknown> | undefined);
+    const schemaOpenApiVersion = typeof parsed.openapi === 'string' ? parsed.openapi : undefined;
+    const schemaVersionFamily = schemaOpenApiVersion ? getOpenApiVersionFamily(schemaOpenApiVersion) : null;
     const result: Record<string, Record<string, SchemaObject>> = {};
 
-    if (components.schemas) {
+    if (components?.schemas) {
       result.schemas = {};
       for (const [name, schema] of Object.entries(components.schemas)) {
         result.schemas[name] = this.extractSchemaFromRaw(schema as Record<string, unknown>);
       }
     }
 
-    if (components.parameters) {
+    if (components?.parameters) {
       result.parameters = {};
       for (const [name, param] of Object.entries(components.parameters)) {
         const paramObj = param as Record<string, unknown>;
@@ -141,11 +179,29 @@ export class OpenApiService {
       }
     }
 
+    if (responses) {
+      result.responses = {};
+      for (const [name, response] of Object.entries(responses)) {
+        const responseObj = response as Record<string, unknown>;
+        result.responses[name] = {
+          description: responseObj.description as string | undefined,
+          type: 'response'
+        } as SchemaObject;
+      }
+    }
+
+    if (requestBodies) {
+      result.requestBodies = {};
+      for (const [name] of Object.entries(requestBodies)) {
+        result.requestBodies[name] = {} as SchemaObject;
+      }
+    }
+
     const apiFile: ApiFile = {
       filePath,
       fileName: path.basename(filePath),
       spec: parsed as unknown as OpenAPI.Document,
-      version: '3.0',
+      version: schemaVersionFamily || '3.0',
       title: path.basename(filePath, '.json'),
       description: undefined,
       servers: [],
@@ -272,9 +328,11 @@ export class OpenApiService {
     const files = this.findJsonFiles(dirPath);
 
     for (const file of files) {
-      const apiFile = await this.parseFile(file);
-      if (apiFile) {
-        apiFiles.push(apiFile);
+      const parseResult = await this.parseFileWithResult(file);
+      if (parseResult.apiFile) {
+        apiFiles.push(parseResult.apiFile);
+      } else {
+        apiFiles.push(this.createParseErrorApiFile(file, parseResult.parseError || 'Unable to parse file'));
       }
     }
 
@@ -894,7 +952,17 @@ export class OpenApiService {
   private isOpenApiSpec(obj: unknown): boolean {
     if (!obj || typeof obj !== 'object') return false;
     const spec = obj as Record<string, unknown>;
-    return 'swagger' in spec || 'openapi' in spec;
+    if ('swagger' in spec) {
+      return false;
+    }
+
+    if ('openapi' in spec) {
+      return isSupportedOpenApiVersion(spec.openapi);
+    }
+
+    const hasPaths = 'paths' in spec && typeof spec.paths === 'object' && spec.paths !== null;
+    const hasInfo = 'info' in spec && typeof spec.info === 'object' && spec.info !== null;
+    return hasPaths && hasInfo;
   }
 
   private isSchemaFile(obj: unknown): boolean {
@@ -902,13 +970,25 @@ export class OpenApiService {
     const spec = obj as Record<string, unknown>;
     if ('swagger' in spec || 'openapi' in spec) return false;
     const components = spec.components as Record<string, unknown> | undefined;
-    return !!(components && typeof components === 'object' && (components.schemas || components.parameters));
+    const hasComponentSections = !!(
+      components
+      && typeof components === 'object'
+      && (components.schemas || components.parameters || components.responses || components.requestBodies)
+    );
+    const hasRootResponses = !!(spec.responses && typeof spec.responses === 'object');
+    const hasRootRequestBodies = !!(spec.requestBodies && typeof spec.requestBodies === 'object');
+    return hasComponentSections || hasRootResponses || hasRootRequestBodies;
   }
 
-  private getSpecVersion(spec: OpenAPI.Document): '2.0' | '3.0' | '3.1' {
-    if ('swagger' in spec) return '2.0';
-    const openapi = (spec as OpenAPIV3.Document).openapi;
-    if (openapi?.startsWith('3.1')) return '3.1';
+  private getSpecVersion(spec: OpenAPI.Document): '3.0' | '3.1' | '3.2' {
+    const openapi = (spec as OpenAPIV3.Document | OpenAPIV3_1.Document).openapi;
+    if (typeof openapi === 'string') {
+      const family = getOpenApiVersionFamily(openapi);
+      if (family) {
+        return family;
+      }
+    }
+
     return '3.0';
   }
 
@@ -990,6 +1070,27 @@ export class OpenApiService {
             } as SchemaObject;
           }
         }
+      }
+    }
+
+    const rawSpec = spec as Record<string, unknown>;
+    const rootResponses = rawSpec.responses as Record<string, unknown> | undefined;
+    if (rootResponses && !result.responses) {
+      result.responses = {};
+      for (const [name, response] of Object.entries(rootResponses)) {
+        const responseObj = response as Record<string, unknown>;
+        result.responses[name] = {
+          description: responseObj.description as string | undefined,
+          type: 'response'
+        } as SchemaObject;
+      }
+    }
+
+    const rootRequestBodies = rawSpec.requestBodies as Record<string, unknown> | undefined;
+    if (rootRequestBodies && !result.requestBodies) {
+      result.requestBodies = {};
+      for (const [name] of Object.entries(rootRequestBodies)) {
+        result.requestBodies[name] = {} as SchemaObject;
       }
     }
 
@@ -1616,7 +1717,7 @@ export class OpenApiService {
 
   async updateApiInfo(
     filePath: string,
-    updates: { title?: string; description?: string; version?: string }
+    updates: { title?: string; description?: string; version?: string; openapiVersion?: string }
   ): Promise<{ success: boolean; message?: string }> {
     try {
       const content = await fs.promises.readFile(filePath, 'utf-8');
@@ -1634,6 +1735,22 @@ export class OpenApiService {
       }
       if (updates.version !== undefined) {
         spec.info.version = updates.version || undefined;
+      }
+
+      if (updates.openapiVersion !== undefined) {
+        if (path.basename(filePath).toLowerCase() !== 'api.json') {
+          return { success: false, message: 'OpenAPI version can only be updated from the main api.json file.' };
+        }
+
+        const validationError = getOpenApiVersionValidationError(updates.openapiVersion);
+        if (validationError) {
+          return { success: false, message: validationError };
+        }
+
+        spec.openapi = updates.openapiVersion.trim();
+        if ('swagger' in spec) {
+          delete spec.swagger;
+        }
       }
 
       const updatedContent = JSON.stringify(spec, null, 2);
@@ -2273,6 +2390,81 @@ export class OpenApiService {
     this.cache.delete(filePath);
   }
 
+  private isWithinRoot(candidatePath: string, rootPath: string): boolean {
+    const relative = path.relative(rootPath, candidatePath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  }
+
+  private findCanonicalApiJsonPath(startPath: string, apiRootPath?: string): string | null {
+    let currentPath = path.resolve(startPath);
+    const resolvedApiRootPath = apiRootPath ? path.resolve(apiRootPath) : undefined;
+
+    if (resolvedApiRootPath) {
+      if (!this.isWithinRoot(currentPath, resolvedApiRootPath)) {
+        return null;
+      }
+
+      const candidatePath = path.join(resolvedApiRootPath, 'api.json');
+      if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+        return candidatePath;
+      }
+
+      return null;
+    }
+
+    while (true) {
+      const candidatePath = path.join(currentPath, 'api.json');
+      if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+        return candidatePath;
+      }
+
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) {
+        return null;
+      }
+
+      currentPath = parentPath;
+    }
+  }
+
+  private resolveCanonicalOpenApiVersion(startPath: string, fileName: string, apiRootPath?: string): { version?: string; message?: string } {
+    const apiJsonPath = this.findCanonicalApiJsonPath(startPath, apiRootPath);
+    if (!apiJsonPath) {
+      const resolvedStartPath = path.resolve(startPath);
+      const resolvedApiRootPath = apiRootPath ? path.resolve(apiRootPath) : resolvedStartPath;
+      const isMainApiJsonCreation = fileName.toLowerCase() === 'api.json' && resolvedStartPath === resolvedApiRootPath;
+      if (isMainApiJsonCreation) {
+        return {
+          version: DEFAULT_OPENAPI_VERSION
+        };
+      }
+
+      return {
+        message: 'Cannot create file: api.json not found. Create api.json with a supported openapi version first.'
+      };
+    }
+
+    try {
+      const apiJsonContent = fs.readFileSync(apiJsonPath, 'utf-8');
+      const parsed = JSON.parse(apiJsonContent) as Record<string, unknown>;
+      const validationError = getOpenApiVersionValidationError(parsed.openapi);
+      if (validationError) {
+        return {
+          message: `Cannot create file: ${validationError}`
+        };
+      }
+
+      return {
+        version: (parsed.openapi as string).trim()
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        message: `Cannot create file: failed to read api.json (${message}).`
+      };
+    }
+  }
+
   async createFolder(parentPath: string, folderName: string): Promise<{ success: boolean; path?: string; message?: string }> {
     try {
       const newFolderPath = path.join(parentPath, folderName);
@@ -2291,7 +2483,7 @@ export class OpenApiService {
     }
   }
 
-  async createFile(parentPath: string, fileName: string): Promise<{ success: boolean; path?: string; message?: string }> {
+  async createFile(parentPath: string, fileName: string, apiRootPath?: string): Promise<{ success: boolean; path?: string; message?: string }> {
     try {
       // Ensure the file has .json extension
       const finalFileName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
@@ -2301,17 +2493,36 @@ export class OpenApiService {
         return { success: false, message: `File "${finalFileName}" already exists` };
       }
 
-      // Create a basic OpenAPI 3.0 template
-      const template = {
-        openapi: "3.0.3",
-        info: {
-          title: fileName.replace(/\.json$/, ''),
-          version: "1.0.0",
-          description: ""
-        },
-        servers: [],
-        paths: {}
-      };
+      const canonicalVersionResult = this.resolveCanonicalOpenApiVersion(parentPath, finalFileName.toLowerCase(), apiRootPath);
+      if (!canonicalVersionResult.version) {
+        return { success: false, message: canonicalVersionResult.message };
+      }
+      const canonicalVersion = canonicalVersionResult.version;
+
+      const normalizedParentPath = parentPath.replace(/\\/g, '/').toLowerCase();
+      const isSchemasFolder = normalizedParentPath.endsWith('components/schemas')
+        || normalizedParentPath.includes('/components/schemas/');
+      const isResponsesFolder = normalizedParentPath.endsWith('components/responses')
+        || normalizedParentPath.includes('/components/responses/');
+      const isRequestBodiesFolder = normalizedParentPath.endsWith('components/requestbodies')
+        || normalizedParentPath.includes('/components/requestbodies/');
+
+      const template = isRequestBodiesFolder
+        ? { openapi: canonicalVersion, requestBodies: {} }
+        : isSchemasFolder
+        ? { openapi: canonicalVersion, components: { schemas: {} } }
+        : isResponsesFolder
+        ? { openapi: canonicalVersion, responses: {} }
+        : {
+          openapi: canonicalVersion,
+          info: {
+            title: fileName.replace(/\.json$/, ''),
+            version: "1.0.0",
+            description: ""
+          },
+          servers: [],
+          paths: {}
+        };
 
       await fs.promises.writeFile(newFilePath, JSON.stringify(template, null, 2), 'utf-8');
 

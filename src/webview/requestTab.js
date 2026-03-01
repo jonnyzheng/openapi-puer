@@ -3,12 +3,354 @@
   const S = window.OpenAPIPuer;
 
   S._activeRequestTab = 'params';
+  S._environmentVariables = [];
+  S._activeEnvironmentBaseUrl = '';
+  S._variableAutocomplete = {
+    isVisible: false,
+    element: null,
+    activeInput: null,
+    tokenStart: -1,
+    tokenEnd: -1,
+    activeIndex: 0,
+    suggestions: []
+  };
+
+  function normalizeVariableMetadata(variable) {
+    return {
+      key: typeof variable?.key === 'string' ? variable.key : '',
+      description: typeof variable?.description === 'string' ? variable.description : '',
+      type: variable?.type === 'secret' || variable?.type === 'url' || variable?.type === 'text'
+        ? variable.type
+        : 'text',
+      isSecret: Boolean(variable?.isSecret)
+    };
+  }
+
+  function renderVariableTokens(text) {
+    const escapedText = S.escapeHtml(text || '');
+    return escapedText.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, function(match) {
+      return '<span class="variable-token">' + match + '</span>';
+    });
+  }
+
+  function updateVariableOverlay(input) {
+    const wrapper = input.closest('.variable-overlay-wrapper');
+    if (!wrapper) return;
+
+    const backdrop = wrapper.querySelector('.variable-overlay-backdrop');
+    if (!backdrop) return;
+
+    backdrop.innerHTML = renderVariableTokens(input.value) + '<span class="variable-overlay-spacer"> </span>';
+    backdrop.scrollLeft = input.scrollLeft;
+    backdrop.scrollTop = input.scrollTop;
+  }
+
+  function getVariableFieldElements() {
+    return Array.from(document.querySelectorAll([
+      '#base-url',
+      '#req-path-params input[type="text"]',
+      '#req-query-params-table input[type="text"]',
+      '#req-headers-table input[type="text"]',
+      '#req-cookies-table input[type="text"]',
+      '#request-body-json-editor',
+      '#request-body-raw-editor',
+      '.kv-name-input',
+      '.kv-value-input'
+    ].join(',')));
+  }
+
+  function getTokenContext(value, cursorPosition) {
+    if (!value || cursorPosition < 2) return null;
+
+    const tokenStart = value.lastIndexOf('{{', cursorPosition - 1);
+    if (tokenStart === -1) return null;
+
+    const tokenPrefix = value.slice(tokenStart + 2, cursorPosition);
+    if (/[{}\s]/.test(tokenPrefix)) return null;
+
+    const closedIndex = value.indexOf('}}', tokenStart + 2);
+    if (closedIndex !== -1 && closedIndex < cursorPosition) {
+      return null;
+    }
+
+    return {
+      tokenStart,
+      tokenEnd: cursorPosition,
+      tokenPrefix
+    };
+  }
+
+  function ensureAutocompleteElement() {
+    if (S._variableAutocomplete.element) {
+      return S._variableAutocomplete.element;
+    }
+
+    const element = document.createElement('div');
+    element.id = 'variable-autocomplete';
+    element.className = 'variable-autocomplete hidden';
+    document.body.appendChild(element);
+
+    S._variableAutocomplete.element = element;
+    return element;
+  }
+
+  function hideVariableAutocomplete() {
+    const autocomplete = S._variableAutocomplete;
+    autocomplete.isVisible = false;
+    autocomplete.activeInput = null;
+    autocomplete.tokenStart = -1;
+    autocomplete.tokenEnd = -1;
+    autocomplete.activeIndex = 0;
+    autocomplete.suggestions = [];
+
+    if (autocomplete.element) {
+      autocomplete.element.classList.add('hidden');
+      autocomplete.element.innerHTML = '';
+    }
+  }
+
+  function filterVariableSuggestions(prefix) {
+    const normalizedPrefix = (prefix || '').toLowerCase();
+    return S._environmentVariables.filter(function(variable) {
+      return variable.key && variable.key.toLowerCase().startsWith(normalizedPrefix);
+    });
+  }
+
+  function positionAutocomplete(autocompleteElement, input) {
+    const rect = input.getBoundingClientRect();
+    const maxWidth = Math.max(rect.width, 220);
+
+    autocompleteElement.style.position = 'fixed';
+    autocompleteElement.style.top = `${rect.bottom + 4}px`;
+    autocompleteElement.style.left = `${rect.left}px`;
+    autocompleteElement.style.minWidth = `${maxWidth}px`;
+    autocompleteElement.style.maxWidth = `${Math.max(maxWidth, 340)}px`;
+    autocompleteElement.style.zIndex = '1100';
+  }
+
+  function renderAutocompleteItems() {
+    const autocomplete = S._variableAutocomplete;
+    const element = ensureAutocompleteElement();
+    element.innerHTML = '';
+
+    if (!autocomplete.suggestions.length) {
+      const empty = document.createElement('div');
+      empty.className = 'variable-autocomplete-empty';
+      empty.textContent = 'No variables found';
+      element.appendChild(empty);
+      return;
+    }
+
+    autocomplete.suggestions.forEach(function(variable, index) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `variable-autocomplete-item${index === autocomplete.activeIndex ? ' active' : ''}`;
+      item.innerHTML = `
+        <span class="variable-autocomplete-key">${S.escapeHtml(variable.key)}</span>
+        <span class="variable-autocomplete-meta">${S.escapeHtml(variable.type || 'text')}</span>
+      `;
+      item.addEventListener('mousedown', function(event) {
+        event.preventDefault();
+      });
+      item.addEventListener('click', function() {
+        S.applyVariableSuggestion(variable.key);
+      });
+      element.appendChild(item);
+    });
+  }
+
+  function showVariableAutocomplete(input, tokenContext) {
+    const suggestions = filterVariableSuggestions(tokenContext.tokenPrefix);
+    if (!suggestions.length) {
+      hideVariableAutocomplete();
+      return;
+    }
+
+    const autocomplete = S._variableAutocomplete;
+    autocomplete.isVisible = true;
+    autocomplete.activeInput = input;
+    autocomplete.tokenStart = tokenContext.tokenStart;
+    autocomplete.tokenEnd = tokenContext.tokenEnd;
+    autocomplete.activeIndex = 0;
+    autocomplete.suggestions = suggestions;
+
+    const element = ensureAutocompleteElement();
+    element.classList.remove('hidden');
+
+    renderAutocompleteItems();
+    positionAutocomplete(element, input);
+  }
+
+  function maybeOpenVariableAutocomplete(input) {
+    if (!input || typeof input.selectionStart !== 'number') {
+      hideVariableAutocomplete();
+      return;
+    }
+
+    const context = getTokenContext(input.value, input.selectionStart);
+    if (!context) {
+      hideVariableAutocomplete();
+      return;
+    }
+
+    showVariableAutocomplete(input, context);
+  }
+
+  S.applyVariableSuggestion = function(variableKey) {
+    const autocomplete = S._variableAutocomplete;
+    const input = autocomplete.activeInput;
+    if (!input) {
+      hideVariableAutocomplete();
+      return;
+    }
+
+    const before = input.value.slice(0, autocomplete.tokenStart);
+    const after = input.value.slice(autocomplete.tokenEnd);
+    const nextValue = `${before}{{${variableKey}}}${after}`;
+    const nextCursor = (before + `{{${variableKey}}}`).length;
+
+    input.value = nextValue;
+    input.focus();
+    input.setSelectionRange(nextCursor, nextCursor);
+    updateVariableOverlay(input);
+    hideVariableAutocomplete();
+  };
+
+  function handleAutocompleteKeydown(event) {
+    const autocomplete = S._variableAutocomplete;
+    if (!autocomplete.isVisible) {
+      return false;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      autocomplete.activeIndex = Math.min(autocomplete.activeIndex + 1, autocomplete.suggestions.length - 1);
+      renderAutocompleteItems();
+      return true;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      autocomplete.activeIndex = Math.max(autocomplete.activeIndex - 1, 0);
+      renderAutocompleteItems();
+      return true;
+    }
+
+    if (event.key === 'Enter') {
+      if (!autocomplete.suggestions.length) {
+        return false;
+      }
+      event.preventDefault();
+      const selected = autocomplete.suggestions[autocomplete.activeIndex];
+      if (selected) {
+        S.applyVariableSuggestion(selected.key);
+      }
+      return true;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      hideVariableAutocomplete();
+      return true;
+    }
+
+    return false;
+  }
+
+  function bindVariableField(input) {
+    if (!input || input.dataset.variableOverlayBound === 'true') {
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `variable-overlay-wrapper${input.tagName.toLowerCase() === 'textarea' ? ' textarea-wrapper' : ''}`;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'variable-overlay-backdrop';
+
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(backdrop);
+    wrapper.appendChild(input);
+
+    input.classList.add('variable-overlay-input');
+    input.dataset.variableOverlayBound = 'true';
+
+    input.addEventListener('input', function() {
+      updateVariableOverlay(input);
+      maybeOpenVariableAutocomplete(input);
+    });
+
+    input.addEventListener('click', function() {
+      maybeOpenVariableAutocomplete(input);
+    });
+
+    input.addEventListener('keyup', function(event) {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Backspace' || event.key === 'Delete') {
+        maybeOpenVariableAutocomplete(input);
+      }
+    });
+
+    input.addEventListener('keydown', function(event) {
+      if (handleAutocompleteKeydown(event)) {
+        return;
+      }
+    });
+
+    input.addEventListener('scroll', function() {
+      updateVariableOverlay(input);
+    });
+
+    updateVariableOverlay(input);
+  }
+
+  S.setupVariableFieldEnhancements = function() {
+    getVariableFieldElements().forEach(function(field) {
+      bindVariableField(field);
+    });
+  };
+
+  S.handleEnvironmentSelectionChange = function(environmentId) {
+    S.vscode.postMessage({
+      type: 'setActiveEnvironment',
+      payload: {
+        id: environmentId || undefined
+      }
+    });
+  };
+
+  S.updateEnvironmentVariables = function(variables, activeBaseUrl) {
+    S._environmentVariables = (variables || []).map(normalizeVariableMetadata).filter(function(variable) {
+      return variable.key;
+    });
+    S._activeEnvironmentBaseUrl = typeof activeBaseUrl === 'string' ? activeBaseUrl : '';
+
+    const baseUrlInput = document.getElementById('base-url');
+    if (baseUrlInput && S._activeEnvironmentBaseUrl) {
+      baseUrlInput.value = S._activeEnvironmentBaseUrl;
+      updateVariableOverlay(baseUrlInput);
+    }
+    S.setupVariableFieldEnhancements();
+  };
+
+  document.addEventListener('mousedown', function(event) {
+    const autocompleteElement = S._variableAutocomplete.element;
+    const activeInput = S._variableAutocomplete.activeInput;
+    if (!autocompleteElement || !S._variableAutocomplete.isVisible) {
+      return;
+    }
+
+    const clickedInsideAutocomplete = autocompleteElement.contains(event.target);
+    const clickedInsideInput = activeInput ? activeInput.contains(event.target) || activeInput === event.target : false;
+    if (!clickedInsideAutocomplete && !clickedInsideInput) {
+      hideVariableAutocomplete();
+    }
+  });
 
   S.setupRequestBuilder = function(endpoint, servers) {
     const escapeHtml = S.escapeHtml;
     const baseUrlInput = document.getElementById('base-url');
 
-    baseUrlInput.value = servers.length > 0 ? servers[0].url : '';
+    baseUrlInput.value = S._activeEnvironmentBaseUrl || (servers.length > 0 ? servers[0].url : '');
 
     const reqBodyTab = document.getElementById('req-body-tab');
     if (reqBodyTab) {
@@ -77,6 +419,7 @@
 
     // Switch to params tab by default
     S.switchRequestTab('params');
+    S.setupVariableFieldEnhancements();
   };
 
   S._updateRequestTabBadges = function(endpoint) {
@@ -134,6 +477,7 @@
     `;
     row.querySelector('.delete-btn').addEventListener('click', () => row.remove());
     table.appendChild(row);
+    S.setupVariableFieldEnhancements();
   };
 
   S.addCustomParamRow = function(table) {
@@ -153,6 +497,7 @@
     `;
     row.querySelector('.delete-btn').addEventListener('click', () => row.remove());
     table.appendChild(row);
+    S.setupVariableFieldEnhancements();
   };
 
   S.generateBodyFromSchema = function() {
@@ -667,6 +1012,8 @@
     } else if (type === 'x-www-form-urlencoded') {
       S._renderRequestKvBodyEditor(container, existingMedia, false, endpoint);
     }
+
+    S.setupVariableFieldEnhancements();
   };
 
   // JSON body editor for request tab
@@ -844,6 +1191,7 @@
       tr.appendChild(tdDel);
 
       tbody.appendChild(tr);
+      S.setupVariableFieldEnhancements();
     }
 
     rows.forEach(function(r) { addKvRow(r); });

@@ -6,4 +6,6 @@ node_modules
 .claude
 .opencode
 .trae
+.sisyphus
 debug-sample/
+openspec/

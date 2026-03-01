@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  DEFAULT_OPENAPI_VERSION,
+  getOpenApiVersionValidationError,
+  isSupportedOpenApiVersion
+} from './OpenApiVersionPolicy';
 
 export class ConfigService {
   private fileWatcher: vscode.FileSystemWatcher | undefined;
@@ -159,9 +164,20 @@ export class ConfigService {
       missing.push('paths/');
     }
 
-    // Check for api.json
-    if (!fs.existsSync(path.join(folderPath, 'api.json'))) {
+    const apiJsonPath = path.join(folderPath, 'api.json');
+    if (!fs.existsSync(apiJsonPath)) {
       missing.push('api.json');
+    } else {
+      try {
+        const apiJsonContent = fs.readFileSync(apiJsonPath, 'utf-8');
+        const parsedApiJson = JSON.parse(apiJsonContent) as Record<string, unknown>;
+        const versionError = getOpenApiVersionValidationError(parsedApiJson.openapi);
+        if (versionError) {
+          missing.push('api.json.openapi');
+        }
+      } catch {
+        missing.push('api.json.openapi');
+      }
     }
 
     return {
@@ -179,7 +195,20 @@ export class ConfigService {
       }
       const environmentsFile = path.join(openapiPuerDir, 'environments.json');
       if (!fs.existsSync(environmentsFile)) {
-        const defaultContent = { environments: [] };
+        const now = new Date().toISOString();
+        const defaultContent = {
+          environments: [
+            {
+              id: 'env_default',
+              name: 'Default',
+              baseUrl: '',
+              description: '',
+              variables: [],
+              createdAt: now,
+              updatedAt: now
+            }
+          ]
+        };
         fs.writeFileSync(environmentsFile, JSON.stringify(defaultContent, null, 2), 'utf-8');
       }
 
@@ -196,8 +225,22 @@ export class ConfigService {
         }
       }
 
+      const apiJsonPath = path.join(folderPath, 'api.json');
+      let scaffoldOpenApiVersion = DEFAULT_OPENAPI_VERSION;
+      if (fs.existsSync(apiJsonPath)) {
+        try {
+          const apiJsonContent = fs.readFileSync(apiJsonPath, 'utf-8');
+          const parsedApiJson = JSON.parse(apiJsonContent) as Record<string, unknown>;
+          if (isSupportedOpenApiVersion(parsedApiJson.openapi)) {
+            scaffoldOpenApiVersion = parsedApiJson.openapi.trim();
+          }
+        } catch {
+          scaffoldOpenApiVersion = DEFAULT_OPENAPI_VERSION;
+        }
+      }
+
       // Create parameter definition files
-      const emptyParams = { components: { parameters: {} } };
+      const emptyParams = { openapi: scaffoldOpenApiVersion, components: { parameters: {} } };
       const paramFiles = ['cookie.json', 'header.json', 'path.json', 'query.json'];
       for (const file of paramFiles) {
         const filePath = path.join(folderPath, 'components', 'parameters', file);
@@ -213,10 +256,9 @@ export class ConfigService {
       }
 
       // Create api.json
-      const apiJsonPath = path.join(folderPath, 'api.json');
       if (!fs.existsSync(apiJsonPath)) {
         const apiJsonContent = {
-          openapi: '3.0.3',
+          openapi: scaffoldOpenApiVersion,
           info: {
             title: 'My API',
             version: '1.0.0',
@@ -331,18 +373,37 @@ Edit \`.openapi-puer/environments.json\` to define variables that can be used in
 {
   "environments": [
     {
+      "id": "env_default",
       "name": "Development",
-      "variables": {
-        "baseUrl": "http://localhost:3000",
-        "apiKey": "dev-key-123"
-      }
+      "baseUrl": "http://localhost:3000",
+      "description": "Local development",
+      "variables": [
+        {
+          "key": "apiKey",
+          "value": "dev-key-123",
+          "description": "Development API key",
+          "type": "text"
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
     },
     {
+      "id": "env_prod",
       "name": "Production",
-      "variables": {
-        "baseUrl": "https://api.example.com",
-        "apiKey": "prod-key-456"
-      }
+      "baseUrl": "https://api.example.com",
+      "description": "Production environment",
+      "variables": [
+        {
+          "key": "apiKey",
+          "value": "",
+          "description": "Production API key",
+          "isSecret": true,
+          "type": "secret"
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
     }
   ]
 }

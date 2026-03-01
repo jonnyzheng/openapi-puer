@@ -153,7 +153,7 @@ export class HttpService {
   private substituteVariables(text: string, variables: Record<string, string>): string {
     if (!text) return text;
 
-    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    return text.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, (match, varName) => {
       if (varName in variables) {
         return variables[varName];
       }
