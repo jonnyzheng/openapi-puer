@@ -12,6 +12,9 @@
       app.innerHTML = S._initialAppHtml;
       setupEventListeners();
       setupCollapsibleSections();
+      if (typeof S.restoreEnvironmentSelector === 'function') {
+        S.restoreEnvironmentSelector();
+      }
     }
   };
 

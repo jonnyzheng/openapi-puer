@@ -132,6 +132,7 @@ export interface EnvironmentVariable {
 }
 
 export interface RequestConfig {
+  requestUrl?: string;
   baseUrl: string;
   path: string;
   method: HttpMethod;
@@ -140,6 +141,18 @@ export interface RequestConfig {
   headers: HeaderParam[];
   body?: string;
   contentType?: string;
+  timeoutMs?: number;
+  auth?: RequestAuthConfig;
+}
+
+export interface RequestAuthConfig {
+  type: 'none' | 'bearer' | 'basic' | 'api-key';
+  bearerToken?: string;
+  basicUsername?: string;
+  basicPassword?: string;
+  apiKeyName?: string;
+  apiKeyValue?: string;
+  apiKeyIn?: 'header' | 'query';
 }
 
 export interface QueryParam {

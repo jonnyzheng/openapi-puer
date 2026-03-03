@@ -5,6 +5,9 @@
   S._activeRequestTab = 'params';
   S._environmentVariables = [];
   S._activeEnvironmentBaseUrl = '';
+  S._requestEndpointServers = [];
+  S._lastEnvironments = [];
+  S._lastActiveEnvironmentId = undefined;
   S._variableAutocomplete = {
     isVisible: false,
     element: null,
@@ -14,6 +17,22 @@
     activeIndex: 0,
     suggestions: []
   };
+
+  function createDefaultRequestAuthState() {
+    return {
+      type: 'none',
+      bearerToken: '',
+      basicUsername: '',
+      basicPassword: '',
+      apiKeyName: '',
+      apiKeyValue: '',
+      apiKeyIn: 'header'
+    };
+  }
+
+  S._requestTimeoutMs = 30000;
+  S._requestAuthState = createDefaultRequestAuthState();
+  S._requestAuthEndpointId = '';
 
   function normalizeVariableMetadata(variable) {
     return {
@@ -45,13 +64,29 @@
     backdrop.scrollTop = input.scrollTop;
   }
 
+  function removeVariableOverlayWrapper(input) {
+    if (!input) return;
+
+    const wrapper = input.closest('.variable-overlay-wrapper');
+    input.classList.remove('variable-overlay-input');
+    delete input.dataset.variableOverlayBound;
+
+    if (!wrapper || !wrapper.parentNode) {
+      return;
+    }
+
+    wrapper.parentNode.insertBefore(input, wrapper);
+    wrapper.remove();
+  }
+
   function getVariableFieldElements() {
     return Array.from(document.querySelectorAll([
-      '#base-url',
       '#req-path-params input[type="text"]',
       '#req-query-params-table input[type="text"]',
       '#req-headers-table input[type="text"]',
       '#req-cookies-table input[type="text"]',
+      '#req-auth-tab input[type="text"]',
+      '#req-auth-tab input[type="password"]',
       '#request-body-json-editor',
       '#request-body-raw-editor',
       '.kv-name-input',
@@ -262,21 +297,10 @@
       return;
     }
 
-    const wrapper = document.createElement('div');
-    wrapper.className = `variable-overlay-wrapper${input.tagName.toLowerCase() === 'textarea' ? ' textarea-wrapper' : ''}`;
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'variable-overlay-backdrop';
-
-    input.parentNode.insertBefore(wrapper, input);
-    wrapper.appendChild(backdrop);
-    wrapper.appendChild(input);
-
-    input.classList.add('variable-overlay-input');
+    removeVariableOverlayWrapper(input);
     input.dataset.variableOverlayBound = 'true';
 
     input.addEventListener('input', function() {
-      updateVariableOverlay(input);
       maybeOpenVariableAutocomplete(input);
     });
 
@@ -297,10 +321,8 @@
     });
 
     input.addEventListener('scroll', function() {
-      updateVariableOverlay(input);
+      maybeOpenVariableAutocomplete(input);
     });
-
-    updateVariableOverlay(input);
   }
 
   S.setupVariableFieldEnhancements = function() {
@@ -318,18 +340,28 @@
     });
   };
 
+  function buildDefaultRequestUrl(endpoint, servers) {
+    const endpointPath = endpoint && endpoint.path ? endpoint.path : '';
+    const serverList = Array.isArray(servers) ? servers : [];
+    const defaultBase = S._activeEnvironmentBaseUrl
+      ? '{{baseUrl}}'
+      : (serverList.length > 0 ? serverList[0].url : '{{baseUrl}}');
+
+    return defaultBase.replace(/\/$/, '') + endpointPath;
+  }
+
   S.updateEnvironmentVariables = function(variables, activeBaseUrl) {
     S._environmentVariables = (variables || []).map(normalizeVariableMetadata).filter(function(variable) {
       return variable.key;
     });
     S._activeEnvironmentBaseUrl = typeof activeBaseUrl === 'string' ? activeBaseUrl : '';
 
-    const baseUrlInput = document.getElementById('base-url');
-    if (baseUrlInput && S._activeEnvironmentBaseUrl) {
-      baseUrlInput.value = S._activeEnvironmentBaseUrl;
-      updateVariableOverlay(baseUrlInput);
+    const requestUrlInput = document.getElementById('base-url');
+    if (requestUrlInput && S.currentEndpoint && !requestUrlInput.value.trim()) {
+      requestUrlInput.value = buildDefaultRequestUrl(S.currentEndpoint, S._requestEndpointServers);
     }
     S.setupVariableFieldEnhancements();
+    S.updateRequestUrlPreview();
   };
 
   document.addEventListener('mousedown', function(event) {
@@ -346,11 +378,346 @@
     }
   });
 
+  function normalizeParameterValue(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '';
+      }
+    }
+    return String(value);
+  }
+
+  function getInitialParameterValue(paramDef) {
+    if (!paramDef) return '';
+    if (paramDef.example !== undefined) return normalizeParameterValue(paramDef.example);
+    if (paramDef.schema && paramDef.schema.default !== undefined) return normalizeParameterValue(paramDef.schema.default);
+    return '';
+  }
+
+  function extractRequestParamRow(row) {
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    if (!checkbox) return null;
+
+    const customKeyInput = row.querySelector('.req-custom-key');
+    const keyCell = row.querySelector('.req-param-key');
+    const key = customKeyInput
+      ? customKeyInput.value.trim()
+      : (keyCell ? keyCell.textContent.replace(/\s*\*\s*$/, '').trim() : '');
+    const valueInput = row.querySelectorAll('input[type="text"]')[customKeyInput ? 1 : 0];
+    const value = valueInput ? valueInput.value : '';
+
+    return {
+      key,
+      value,
+      enabled: checkbox.checked
+    };
+  }
+
+  function collectRequestParams(tableId) {
+    const collected = [];
+    const table = document.getElementById(tableId);
+    if (!table) return collected;
+
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      const rowData = extractRequestParamRow(row);
+      if (rowData && rowData.key) {
+        collected.push(rowData);
+      }
+    });
+
+    return collected;
+  }
+
+  function upsertHeaderParam(headers, key, value) {
+    const normalized = key.toLowerCase();
+    const existing = headers.find(function(header) {
+      return header.key.toLowerCase() === normalized;
+    });
+    if (existing) {
+      existing.value = value;
+      existing.enabled = true;
+      return;
+    }
+    headers.push({ key, value, enabled: true });
+  }
+
+  function upsertQueryParam(queryParams, key, value) {
+    const normalized = key.toLowerCase();
+    const existing = queryParams.find(function(param) {
+      return param.key.toLowerCase() === normalized;
+    });
+    if (existing) {
+      existing.value = value;
+      existing.enabled = true;
+      return;
+    }
+    queryParams.push({ key, value, enabled: true });
+  }
+
+  function encodeBasicCredentials(rawValue) {
+    try {
+      return btoa(rawValue);
+    } catch {
+      const bytes = new TextEncoder().encode(rawValue);
+      let binary = '';
+      bytes.forEach(function(byte) {
+        binary += String.fromCharCode(byte);
+      });
+      return btoa(binary);
+    }
+  }
+
+  S.clearRequestValidationError = function() {
+    const messageEl = document.getElementById('request-validation-message');
+    if (!messageEl) return;
+    messageEl.textContent = '';
+    messageEl.style.display = 'none';
+  };
+
+  S.showRequestValidationError = function(message, tabName) {
+    const messageEl = document.getElementById('request-validation-message');
+    if (messageEl) {
+      messageEl.textContent = message;
+      messageEl.style.display = 'block';
+    }
+    if (tabName) {
+      S.switchRequestTab(tabName);
+    }
+  };
+
+  S.updateRequestUrlPreview = function() {
+    return;
+  };
+
+  S._renderRequestAuthFields = function() {
+    const fieldsContainer = document.getElementById('req-auth-fields');
+    const authTypeSelect = document.getElementById('req-auth-type');
+    if (!fieldsContainer || !authTypeSelect) return;
+
+    const state = S._requestAuthState;
+    const authType = authTypeSelect.value || 'none';
+    state.type = authType;
+
+    if (authType === 'none') {
+      fieldsContainer.innerHTML = '<div class="auth-help-text" style="font-size:11px; color:var(--vscode-descriptionForeground);">No authorization will be added.</div>';
+      S.updateRequestUrlPreview();
+      return;
+    }
+
+    if (authType === 'bearer') {
+      fieldsContainer.innerHTML = `
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-bearer-token" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Token</label>
+          <input type="text" id="req-auth-bearer-token" placeholder="Enter bearer token" style="flex:1;">
+        </div>
+        <div class="auth-help-text" style="font-size:11px; color:var(--vscode-descriptionForeground);">Adds <code>Authorization: Bearer &lt;token&gt;</code> to headers.</div>
+      `;
+
+      const tokenInput = document.getElementById('req-auth-bearer-token');
+      tokenInput.value = state.bearerToken || '';
+      tokenInput.addEventListener('input', function() {
+        state.bearerToken = tokenInput.value;
+        S.clearRequestValidationError();
+      });
+    } else if (authType === 'basic') {
+      fieldsContainer.innerHTML = `
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-basic-username" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Username</label>
+          <input type="text" id="req-auth-basic-username" placeholder="Enter username" style="flex:1;">
+        </div>
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-basic-password" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Password</label>
+          <input type="password" id="req-auth-basic-password" placeholder="Enter password" style="flex:1;">
+        </div>
+        <div class="auth-help-text" style="font-size:11px; color:var(--vscode-descriptionForeground);">Adds <code>Authorization: Basic &lt;base64(username:password)&gt;</code> to headers.</div>
+      `;
+
+      const usernameInput = document.getElementById('req-auth-basic-username');
+      const passwordInput = document.getElementById('req-auth-basic-password');
+      usernameInput.value = state.basicUsername || '';
+      passwordInput.value = state.basicPassword || '';
+      usernameInput.addEventListener('input', function() {
+        state.basicUsername = usernameInput.value;
+        S.clearRequestValidationError();
+      });
+      passwordInput.addEventListener('input', function() {
+        state.basicPassword = passwordInput.value;
+        S.clearRequestValidationError();
+      });
+    } else if (authType === 'api-key') {
+      fieldsContainer.innerHTML = `
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-api-key-name" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Key</label>
+          <input type="text" id="req-auth-api-key-name" placeholder="e.g. X-API-Key" style="flex:1;">
+        </div>
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-api-key-value" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Value</label>
+          <input type="text" id="req-auth-api-key-value" placeholder="Enter API key value" style="flex:1;">
+        </div>
+        <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+          <label for="req-auth-api-key-in" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Add To</label>
+          <select id="req-auth-api-key-in" style="flex:1;">
+            <option value="header">Header</option>
+            <option value="query">Query Params</option>
+          </select>
+        </div>
+      `;
+
+      const keyNameInput = document.getElementById('req-auth-api-key-name');
+      const keyValueInput = document.getElementById('req-auth-api-key-value');
+      const keyInSelect = document.getElementById('req-auth-api-key-in');
+
+      keyNameInput.value = state.apiKeyName || '';
+      keyValueInput.value = state.apiKeyValue || '';
+      keyInSelect.value = state.apiKeyIn || 'header';
+
+      keyNameInput.addEventListener('input', function() {
+        state.apiKeyName = keyNameInput.value;
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+      keyValueInput.addEventListener('input', function() {
+        state.apiKeyValue = keyValueInput.value;
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+      keyInSelect.addEventListener('change', function() {
+        state.apiKeyIn = keyInSelect.value;
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+    }
+
+    S.setupVariableFieldEnhancements();
+    S.updateRequestUrlPreview();
+  };
+
+  S._ensureRequestBuilderBindings = function() {
+    const baseUrlInput = document.getElementById('base-url');
+    if (baseUrlInput && baseUrlInput.dataset.requestBound !== 'true') {
+      baseUrlInput.dataset.requestBound = 'true';
+      baseUrlInput.addEventListener('input', function() {
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+    }
+
+    const timeoutInput = document.getElementById('req-timeout-ms');
+    if (timeoutInput && timeoutInput.dataset.requestBound !== 'true') {
+      timeoutInput.dataset.requestBound = 'true';
+      timeoutInput.addEventListener('input', function() {
+        S.clearRequestValidationError();
+      });
+    }
+
+    const pathParamsContainer = document.getElementById('req-path-params');
+    if (pathParamsContainer && pathParamsContainer.dataset.requestBound !== 'true') {
+      pathParamsContainer.dataset.requestBound = 'true';
+      pathParamsContainer.addEventListener('input', function() {
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+    }
+
+    const queryParamsTable = document.getElementById('req-query-params-table');
+    if (queryParamsTable && queryParamsTable.dataset.requestBound !== 'true') {
+      queryParamsTable.dataset.requestBound = 'true';
+      queryParamsTable.addEventListener('input', function() {
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+      queryParamsTable.addEventListener('change', function() {
+        S.clearRequestValidationError();
+        S.updateRequestUrlPreview();
+      });
+    }
+
+    const authTypeSelect = document.getElementById('req-auth-type');
+    if (authTypeSelect && authTypeSelect.dataset.requestBound !== 'true') {
+      authTypeSelect.dataset.requestBound = 'true';
+      authTypeSelect.addEventListener('change', function() {
+        S.clearRequestValidationError();
+        S._renderRequestAuthFields();
+      });
+    }
+  };
+
+  S._applyRequestAuth = function(queryParams, headers) {
+    const authState = S._requestAuthState || { type: 'none' };
+
+    if (authState.type === 'none') {
+      return { ok: true };
+    }
+
+    if (authState.type === 'bearer') {
+      const token = (authState.bearerToken || '').trim();
+      if (!token) {
+        return { ok: false, message: 'Bearer token is required.', tab: 'auth' };
+      }
+      upsertHeaderParam(headers, 'Authorization', `Bearer ${token}`);
+      return { ok: true };
+    }
+
+    if (authState.type === 'basic') {
+      const username = authState.basicUsername || '';
+      const password = authState.basicPassword || '';
+      if (!username.trim() && !password.trim()) {
+        return { ok: false, message: 'Username or password is required for Basic Auth.', tab: 'auth' };
+      }
+      const encoded = encodeBasicCredentials(`${username}:${password}`);
+      upsertHeaderParam(headers, 'Authorization', `Basic ${encoded}`);
+      return { ok: true };
+    }
+
+    if (authState.type === 'api-key') {
+      const keyName = (authState.apiKeyName || '').trim();
+      const keyValue = authState.apiKeyValue || '';
+      const keyIn = authState.apiKeyIn || 'header';
+
+      if (!keyName) {
+        return { ok: false, message: 'API key name is required.', tab: 'auth' };
+      }
+      if (!keyValue) {
+        return { ok: false, message: 'API key value is required.', tab: 'auth' };
+      }
+
+      if (keyIn === 'query') {
+        upsertQueryParam(queryParams, keyName, keyValue);
+      } else {
+        upsertHeaderParam(headers, keyName, keyValue);
+      }
+
+      return { ok: true };
+    }
+
+    return { ok: true };
+  };
+
   S.setupRequestBuilder = function(endpoint, servers) {
     const escapeHtml = S.escapeHtml;
     const baseUrlInput = document.getElementById('base-url');
+    const timeoutInput = document.getElementById('req-timeout-ms');
 
-    baseUrlInput.value = S._activeEnvironmentBaseUrl || (servers.length > 0 ? servers[0].url : '');
+    if (S._requestAuthEndpointId !== endpoint.id) {
+      S._requestAuthState = createDefaultRequestAuthState();
+      S._requestAuthEndpointId = endpoint.id;
+    }
+
+    S._requestEndpointServers = Array.isArray(servers) ? servers : [];
+    const defaultRequestUrl = buildDefaultRequestUrl(endpoint, S._requestEndpointServers);
+    if (baseUrlInput) {
+      removeVariableOverlayWrapper(baseUrlInput);
+      baseUrlInput.value = defaultRequestUrl;
+      baseUrlInput.placeholder = '{{baseUrl}}/path/to/endpoint';
+    }
+    if (timeoutInput) {
+      timeoutInput.value = String(S._requestTimeoutMs || 30000);
+    }
+    S.clearRequestValidationError();
 
     const reqBodyTab = document.getElementById('req-body-tab');
     if (reqBodyTab) {
@@ -364,11 +731,12 @@
     const pathParams = endpoint.parameters?.filter(p => p.in === 'path') || [];
     if (pathParams.length) {
       pathParams.forEach(p => {
+        const initialValue = getInitialParameterValue(p);
         const div = document.createElement('div');
         div.className = 'path-param-row';
         div.innerHTML = `
           <label>${escapeHtml(p.name)} ${p.required ? '<span class="required-indicator">*</span>' : ''}</label>
-          <input type="text" data-param="${escapeHtml(p.name)}" placeholder="${escapeHtml(p.schema?.type || 'string')} ${p.description ? '- ' + escapeHtml(p.description) : ''}">
+          <input type="text" data-param="${escapeHtml(p.name)}" value="${escapeHtml(initialValue)}" placeholder="${escapeHtml(p.schema?.type || 'string')} ${p.description ? '- ' + escapeHtml(p.description) : ''}">
         `;
         pathParamsContainer.appendChild(div);
       });
@@ -379,7 +747,7 @@
     queryParamsTable.innerHTML = '';
     const queryParams = endpoint.parameters?.filter(p => p.in === 'query') || [];
     queryParams.forEach(p => {
-      S.addRequestParamRow(queryParamsTable, p.name, '', true, p);
+      S.addRequestParamRow(queryParamsTable, p.name, getInitialParameterValue(p), true, p);
     });
 
     // Populate headers
@@ -388,7 +756,7 @@
     const headerParams = endpoint.parameters?.filter(p => p.in === 'header') || [];
     if (headerParams.length) {
       headerParams.forEach(p => {
-        S.addRequestParamRow(headersTable, p.name, '', true, p);
+        S.addRequestParamRow(headersTable, p.name, getInitialParameterValue(p), true, p);
       });
     } else {
       const emptyRow = document.createElement('tr');
@@ -402,7 +770,7 @@
     const cookieParams = endpoint.parameters?.filter(p => p.in === 'cookie') || [];
     if (cookieParams.length) {
       cookieParams.forEach(p => {
-        S.addRequestParamRow(cookiesTable, p.name, '', true, p);
+        S.addRequestParamRow(cookiesTable, p.name, getInitialParameterValue(p), true, p);
       });
     } else {
       const emptyRow = document.createElement('tr');
@@ -415,11 +783,22 @@
     if (bodyTabBtn) {
       bodyTabBtn.style.display = hasBody ? '' : 'none';
     }
+
+    const authTypeSelect = document.getElementById('req-auth-type');
+    if (authTypeSelect) {
+      authTypeSelect.value = S._requestAuthState?.type || 'none';
+      S._renderRequestAuthFields();
+    }
+
     S._updateRequestTabBadges(endpoint);
 
     // Switch to params tab by default
     S.switchRequestTab('params');
+    S._ensureRequestBuilderBindings();
     S.setupVariableFieldEnhancements();
+    S.updateRequestUrlPreview();
+
+    S.vscode.postMessage({ type: 'requestEnvironments' });
   };
 
   S._updateRequestTabBadges = function(endpoint) {
@@ -435,7 +814,9 @@
       if (tab === 'params') label = 'Params' + (paramCount > 0 ? ' (' + paramCount + ')' : '');
       else if (tab === 'body') label = 'Body';
       else if (tab === 'headers') label = 'Headers' + (headerCount > 0 ? ' (' + headerCount + ')' : '');
+      else if (tab === 'auth') label = 'Auth';
       else if (tab === 'cookies') label = 'Cookies' + (cookieCount > 0 ? ' (' + cookieCount + ')' : '');
+      else if (tab === 'settings') label = 'Settings';
       btn.textContent = label;
     });
   };
@@ -475,9 +856,13 @@
       <td class="req-param-type">${escapeHtml(typeHint)}</td>
       <td><button class="delete-btn">×</button></td>
     `;
-    row.querySelector('.delete-btn').addEventListener('click', () => row.remove());
+    row.querySelector('.delete-btn').addEventListener('click', function() {
+      row.remove();
+      S.updateRequestUrlPreview();
+    });
     table.appendChild(row);
     S.setupVariableFieldEnhancements();
+    S.updateRequestUrlPreview();
   };
 
   S.addCustomParamRow = function(table) {
@@ -495,9 +880,13 @@
       <td></td>
       <td><button class="delete-btn">×</button></td>
     `;
-    row.querySelector('.delete-btn').addEventListener('click', () => row.remove());
+    row.querySelector('.delete-btn').addEventListener('click', function() {
+      row.remove();
+      S.updateRequestUrlPreview();
+    });
     table.appendChild(row);
     S.setupVariableFieldEnhancements();
+    S.updateRequestUrlPreview();
   };
 
   S.generateBodyFromSchema = function() {
@@ -526,7 +915,30 @@
   };
 
   S.buildRequestConfig = function() {
-    const baseUrlInput = document.getElementById('base-url');
+    const requestUrlInput = document.getElementById('base-url');
+    const timeoutInput = document.getElementById('req-timeout-ms');
+
+    S.clearRequestValidationError();
+
+    const requestUrl = requestUrlInput.value.trim();
+    if (!requestUrl) {
+      S.showRequestValidationError('Request URL is required.', 'params');
+      return null;
+    }
+
+    var timeoutMs = S._requestTimeoutMs || 30000;
+    if (timeoutInput) {
+      const timeoutRaw = timeoutInput.value.trim();
+      if (timeoutRaw) {
+        const parsedTimeout = Number(timeoutRaw);
+        if (!Number.isInteger(parsedTimeout) || parsedTimeout < 1) {
+          S.showRequestValidationError('Timeout must be a whole number greater than 0.', 'settings');
+          return null;
+        }
+        timeoutMs = parsedTimeout;
+      }
+    }
+    S._requestTimeoutMs = timeoutMs;
 
     // Path params
     const pathParams = {};
@@ -536,56 +948,26 @@
 
     const requiredPathParams = S.currentEndpoint.parameters?.filter(p => p.in === 'path' && p.required) || [];
     for (const p of requiredPathParams) {
-      if (!pathParams[p.name]) {
-        alert(`Path parameter "${p.name}" is required`);
-        S.switchRequestTab('params');
+      const pathValue = pathParams[p.name];
+      if (typeof pathValue !== 'string' || !pathValue.trim()) {
+        S.showRequestValidationError(`Path parameter "${p.name}" is required.`, 'params');
         return null;
       }
     }
 
     // Query params
-    const queryParams = [];
-    document.getElementById('req-query-params-table').querySelectorAll('tbody tr').forEach(row => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
-      if (!checkbox) return;
-      const enabled = checkbox.checked;
-      const keyCell = row.querySelector('.req-param-key');
-      const customKeyInput = row.querySelector('.req-custom-key');
-      const key = customKeyInput ? customKeyInput.value : (keyCell ? keyCell.textContent.replace(/\s*\*\s*$/, '').trim() : '');
-      const valueInput = row.querySelectorAll('input[type="text"]')[customKeyInput ? 1 : 0];
-      const value = valueInput ? valueInput.value : '';
-      if (key) {
-        queryParams.push({ key, value, enabled });
-      }
-    });
+    const queryParams = collectRequestParams('req-query-params-table');
 
     // Headers
-    const headers = [];
-    document.getElementById('req-headers-table').querySelectorAll('tbody tr').forEach(row => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
-      if (!checkbox) return;
-      const enabled = checkbox.checked;
-      const keyCell = row.querySelector('.req-param-key');
-      const customKeyInput = row.querySelector('.req-custom-key');
-      const key = customKeyInput ? customKeyInput.value : (keyCell ? keyCell.textContent.replace(/\s*\*\s*$/, '').trim() : '');
-      const valueInput = row.querySelectorAll('input[type="text"]')[customKeyInput ? 1 : 0];
-      const value = valueInput ? valueInput.value : '';
-      if (key) {
-        headers.push({ key, value, enabled });
-      }
-    });
+    const headers = collectRequestParams('req-headers-table');
 
     // Cookies - build Cookie header from cookie params
+    const cookieParams = collectRequestParams('req-cookies-table');
     const cookieParts = [];
-    document.getElementById('req-cookies-table').querySelectorAll('tbody tr').forEach(row => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
-      if (!checkbox) return;
-      const enabled = checkbox.checked;
-      const keyCell = row.querySelector('.req-param-key');
-      const customKeyInput = row.querySelector('.req-custom-key');
-      const key = customKeyInput ? customKeyInput.value : (keyCell ? keyCell.textContent.replace(/\s*\*\s*$/, '').trim() : '');
-      const valueInput = row.querySelectorAll('input[type="text"]')[customKeyInput ? 1 : 0];
-      const value = valueInput ? valueInput.value : '';
+    cookieParams.forEach(function(cookieParam) {
+      const enabled = cookieParam.enabled;
+      const key = cookieParam.key;
+      const value = cookieParam.value;
       if (key && enabled) {
         cookieParts.push(`${key}=${value}`);
       }
@@ -593,6 +975,55 @@
     if (cookieParts.length) {
       headers.push({ key: 'Cookie', value: cookieParts.join('; '), enabled: true });
     }
+
+    const authResult = S._applyRequestAuth(queryParams, headers);
+    if (!authResult.ok) {
+      S.showRequestValidationError(authResult.message || 'Auth configuration is invalid.', authResult.tab || 'auth');
+      return null;
+    }
+
+    const requiredQueryParams = S.currentEndpoint.parameters?.filter(p => p.in === 'query' && p.required) || [];
+    for (const p of requiredQueryParams) {
+      const matched = queryParams.find(function(queryParam) {
+        return queryParam.key === p.name;
+      });
+      if (!matched || !matched.enabled || !matched.value.trim()) {
+        S.showRequestValidationError(`Query parameter "${p.name}" is required.`, 'params');
+        return null;
+      }
+    }
+
+    const requiredHeaderParams = S.currentEndpoint.parameters?.filter(p => p.in === 'header' && p.required) || [];
+    for (const p of requiredHeaderParams) {
+      const matched = headers.find(function(headerParam) {
+        return headerParam.key.toLowerCase() === p.name.toLowerCase();
+      });
+      if (!matched || !matched.enabled || !matched.value.trim()) {
+        S.showRequestValidationError(`Header "${p.name}" is required.`, 'headers');
+        return null;
+      }
+    }
+
+    const requiredCookieParams = S.currentEndpoint.parameters?.filter(p => p.in === 'cookie' && p.required) || [];
+    for (const p of requiredCookieParams) {
+      const matched = cookieParams.find(function(cookieParam) {
+        return cookieParam.key === p.name;
+      });
+      if (!matched || !matched.enabled || !matched.value.trim()) {
+        S.showRequestValidationError(`Cookie "${p.name}" is required.`, 'cookies');
+        return null;
+      }
+    }
+
+    const auth = {
+      type: S._requestAuthState.type || 'none',
+      bearerToken: S._requestAuthState.bearerToken || '',
+      basicUsername: S._requestAuthState.basicUsername || '',
+      basicPassword: S._requestAuthState.basicPassword || '',
+      apiKeyName: S._requestAuthState.apiKeyName || '',
+      apiKeyValue: S._requestAuthState.apiKeyValue || '',
+      apiKeyIn: S._requestAuthState.apiKeyIn || 'header'
+    };
 
     // Body - read from the active request body editor
     var body = undefined;
@@ -638,14 +1069,17 @@
     }
 
     return {
-      baseUrl: baseUrlInput.value,
-      path: S.currentEndpoint.path,
+      requestUrl,
+      baseUrl: '',
+      path: '',
       method: S.currentEndpoint.method,
       pathParams,
       queryParams,
       headers,
       body: body,
-      contentType: contentType
+      contentType: contentType,
+      timeoutMs,
+      auth
     };
   };
 
@@ -859,34 +1293,13 @@
   };
 
   S.copyCurl = function() {
-    if (!S.currentEndpoint) return;
-
-    const config = S.buildRequestConfig();
-    if (!config) return;
-
-    let url = config.baseUrl + config.path;
-    for (const [key, value] of Object.entries(config.pathParams)) {
-      url = url.replace(`{${key}}`, encodeURIComponent(value));
-    }
-
-    const enabledQuery = config.queryParams.filter(p => p.enabled);
-    if (enabledQuery.length) {
-      url += '?' + enabledQuery.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
-    }
-
-    let curl = `curl -X ${config.method.toUpperCase()} '${url}'`;
-
-    config.headers.filter(h => h.enabled).forEach(h => {
-      curl += ` \\\n  -H '${h.key}: ${h.value}'`;
-    });
-
-    if (config.body) {
-      curl += ` \\\n  -H 'Content-Type: ${config.contentType}'`;
-      curl += ` \\\n  -d '${config.body.replace(/'/g, "\\'")}'`;
-    }
-
-    navigator.clipboard.writeText(curl);
-  };
+      if (!S.currentEndpoint) return;
+  
+      const config = S.buildRequestConfig();
+      if (!config) return;
+  
+      S.vscode.postMessage({ type: 'copyCurl', payload: config });
+    };
 
   S.saveResponse = function() {
     if (S.lastResponse) {
@@ -896,15 +1309,39 @@
 
 
   S.updateEnvironments = function(environments, activeId) {
+    if (Array.isArray(environments)) {
+      S._lastEnvironments = environments.map(function(env) {
+        return {
+          id: env.id,
+          name: env.name
+        };
+      });
+    }
+    S._lastActiveEnvironmentId = typeof activeId === 'string' ? activeId : undefined;
+
     const environmentSelect = document.getElementById('environment-select');
+    if (!environmentSelect) {
+      return;
+    }
+
+    const safeEnvironments = Array.isArray(S._lastEnvironments) ? S._lastEnvironments : [];
     environmentSelect.innerHTML = '<option value="">No Environment</option>';
-    environments.forEach(env => {
+    safeEnvironments.forEach(env => {
       const option = document.createElement('option');
       option.value = env.id;
       option.textContent = env.name;
-      if (env.id === activeId) option.selected = true;
       environmentSelect.appendChild(option);
     });
+
+    environmentSelect.value = S._lastActiveEnvironmentId || '';
+  };
+
+  S.restoreEnvironmentSelector = function() {
+    S.updateEnvironments(S._lastEnvironments, S._lastActiveEnvironmentId);
+
+    if (!Array.isArray(S._lastEnvironments) || S._lastEnvironments.length === 0) {
+      S.vscode.postMessage({ type: 'requestEnvironments' });
+    }
   };
 
   // ---- Request Body Tab Implementation (mirrors renderBodyTab in detailsTab.js) ----

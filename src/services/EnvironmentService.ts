@@ -11,6 +11,7 @@ export class EnvironmentService {
   private workspaceState: vscode.Memento;
   private secretStorage: vscode.SecretStorage;
   private workspaceRoot: string | undefined;
+  private apiDirectory: string | undefined;
 
   private onEnvironmentsChangeEmitter = new vscode.EventEmitter<void>();
   readonly onEnvironmentsChange = this.onEnvironmentsChangeEmitter.event;
@@ -18,20 +19,36 @@ export class EnvironmentService {
   constructor(context: vscode.ExtensionContext) {
     this.workspaceState = context.workspaceState;
     this.secretStorage = context.secrets;
-    this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    this.workspaceRoot = this.resolveWorkspaceRoot();
 
     this.loadEnvironments();
     this.activeEnvironmentId = this.workspaceState.get('activeEnvironmentId');
   }
 
+  private resolveWorkspaceRoot(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  private resolveBaseDirectory(): string | undefined {
+    if (this.apiDirectory) return this.apiDirectory;
+    return this.resolveWorkspaceRoot();
+  }
+
+  setApiDirectory(apiDirectory: string | undefined): void {
+    this.apiDirectory = apiDirectory;
+    this.loadEnvironments();
+  }
+
   private getEnvironmentsFilePath(): string | undefined {
-    if (!this.workspaceRoot) return undefined;
-    return path.join(this.workspaceRoot, '.openapi-puer', 'environments.json');
+    const baseDir = this.resolveBaseDirectory();
+    if (!baseDir) return undefined;
+    return path.join(baseDir, '.openapi-puer', 'environments.json');
   }
 
   private ensureDirectoryExists(): void {
-    if (!this.workspaceRoot) return;
-    const dir = path.join(this.workspaceRoot, '.openapi-puer');
+    const baseDir = this.resolveBaseDirectory();
+    if (!baseDir) return;
+    const dir = path.join(baseDir, '.openapi-puer');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -83,6 +100,10 @@ export class EnvironmentService {
 
   getEnvironments(): Environment[] {
     return this.environments;
+  }
+
+  reloadEnvironmentsFromDisk(): void {
+    this.loadEnvironments();
   }
 
   async setEnvironments(
@@ -377,6 +398,8 @@ export class EnvironmentService {
         variables[variable.key] = variable.value;
       }
     }
+
+    variables.baseUrl = environment.baseUrl ?? '';
 
     return variables;
   }

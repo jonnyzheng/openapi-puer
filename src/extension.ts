@@ -27,6 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
   configService = new ConfigService();
   httpService = new HttpService();
   environmentService = new EnvironmentService(context);
+  environmentService.setApiDirectory(configService.getApiDirectory() || undefined);
   const environmentEditorProvider = EnvironmentEditorProvider.register(context, environmentService);
   treeProvider = new ApiTreeProvider();
 
@@ -188,6 +189,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       await configService.setApiDirectory(selectedPath);
+      environmentService.setApiDirectory(selectedPath);
       configService.setupFileWatcher(selectedPath);
       openApiService.clearCache();
       await refreshApiFiles();
@@ -225,6 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (validation.valid) {
       // Structure is complete, just save the path
       await configService.setApiDirectory(selectedPath);
+      environmentService.setApiDirectory(selectedPath);
       configService.setupFileWatcher(selectedPath);
       openApiService.clearCache();
       await refreshApiFiles();
@@ -242,6 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           await configService.scaffoldFolderStructure(selectedPath);
           await configService.setApiDirectory(selectedPath);
+          environmentService.setApiDirectory(selectedPath);
           configService.setupFileWatcher(selectedPath);
           openApiService.clearCache();
           await refreshApiFiles();
@@ -568,6 +572,7 @@ export function activate(context: vscode.ExtensionContext) {
   const configChangeDisposable = configService.onConfigurationChange(async () => {
     const newDirectory = configService.getApiDirectory();
     if (newDirectory && configService.validateAndNotify(newDirectory)) {
+      environmentService.setApiDirectory(newDirectory);
       configService.setupFileWatcher(newDirectory);
       openApiService.clearCache();
       await refreshApiFiles();
@@ -639,6 +644,8 @@ async function refreshApiFiles(): Promise<void> {
 function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoint): void {
   const panel = ApiPanel.createOrShow(context.extensionUri);
 
+  registerPanelHandlers(panel);
+
   // Find the API file for this endpoint to get servers and components
   const apiFile = apiFiles.find(f => f.filePath === endpoint.filePath);
   const servers = apiFile?.servers || [];
@@ -646,8 +653,6 @@ function openEndpointPanel(context: vscode.ExtensionContext, endpoint: ApiEndpoi
 
   panel.showEndpoint(endpoint, servers, components);
   updatePanelEnvironments();
-
-  registerPanelHandlers(panel);
 }
 
 function registerPanelHandlers(panel: ApiPanel): void {
@@ -672,6 +677,18 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  panel.onCopyCurl(async (config) => {
+    try {
+      const variables = await environmentService.getVariablesAsRecord();
+      const curl = httpService.buildCurlCommand(config, variables);
+      await vscode.env.clipboard.writeText(curl);
+      panel.notifyOverviewSaved(true, 'cURL copied');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      panel.notifyOverviewSaved(false, message);
+    }
+  });
+
   panel.onSetActiveEnvironment(async (data) => {
     const nextId = typeof data.id === 'string' && data.id.trim() ? data.id : undefined;
     await environmentService.setActiveEnvironment(nextId);
@@ -679,6 +696,10 @@ function registerPanelHandlers(panel: ApiPanel): void {
 
   panel.onOpenEnvironmentManager(async () => {
     await openEnvironmentManagerFile();
+  });
+
+  panel.onRequestEnvironments(() => {
+    syncPanelEnvironments(panel);
   });
 
   // Handle update overview
@@ -1082,6 +1103,7 @@ function getOpenApiVersionValue(apiFile: ApiFile): string | undefined {
 
 function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const panel = ApiPanel.createOrShow(context.extensionUri);
+  registerPanelHandlers(panel);
   const isCanonicalApiFile = apiFile.fileName.toLowerCase() === 'api.json';
 
   panel.showApiFile({
@@ -1097,7 +1119,6 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
     spec: apiFile.spec
   });
 
-  registerPanelHandlers(panel);
 }
 
 function updateStatusBar(): void {
@@ -1118,6 +1139,7 @@ function updatePanelEnvironments(): void {
 }
 
 function syncPanelEnvironments(panel: ApiPanel): void {
+  environmentService.reloadEnvironmentsFromDisk();
   const environments = environmentService.getEnvironments().map(e => ({
     id: e.id,
     name: e.name
@@ -1128,14 +1150,15 @@ function syncPanelEnvironments(panel: ApiPanel): void {
 }
 
 async function openEnvironmentManagerFile(): Promise<void> {
-  const workspaceRoot = configService.getWorkspaceRoot();
-  if (!workspaceRoot) {
+  const apiDirectory = configService.getApiDirectory();
+  const baseDir = apiDirectory || configService.getWorkspaceRoot();
+  if (!baseDir) {
     vscode.window.showWarningMessage('Open a workspace folder to manage environments.');
     return;
   }
 
-  const openapiPuerDirUri = vscode.Uri.file(path.join(workspaceRoot, '.openapi-puer'));
-  const environmentsFileUri = vscode.Uri.file(path.join(workspaceRoot, '.openapi-puer', 'environments.json'));
+  const openapiPuerDirUri = vscode.Uri.file(path.join(baseDir, '.openapi-puer'));
+  const environmentsFileUri = vscode.Uri.file(path.join(baseDir, '.openapi-puer', 'environments.json'));
 
   await vscode.workspace.fs.createDirectory(openapiPuerDirUri);
 
@@ -1156,14 +1179,13 @@ export function deactivate() {
 
 function openSchemaFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const panel = ApiPanel.createOrShow(context.extensionUri);
+  registerPanelHandlers(panel);
 
   panel.showSchemaFile({
     filePath: apiFile.filePath,
     title: apiFile.title,
     components: apiFile.components || {}
   });
-
-  registerPanelHandlers(panel);
 }
 
 function setupNewTabHandlers(panel: ApiPanel): void {
@@ -1174,6 +1196,10 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onOpenEnvironmentManager(async () => {
     await openEnvironmentManagerFile();
+  });
+
+  panel.onRequestEnvironments(() => {
+    syncPanelEnvironments(panel);
   });
 
   panel.onSendRequest(async (config) => {
@@ -1187,6 +1213,18 @@ function setupNewTabHandlers(panel: ApiPanel): void {
       panel.showError(message);
     } finally {
       panel.showLoading(false);
+    }
+  });
+
+  panel.onCopyCurl(async (config) => {
+    try {
+      const variables = await environmentService.getVariablesAsRecord();
+      const curl = httpService.buildCurlCommand(config, variables);
+      await vscode.env.clipboard.writeText(curl);
+      panel.notifyOverviewSaved(true, 'cURL copied');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      panel.notifyOverviewSaved(false, message);
     }
   });
 
@@ -1388,19 +1426,20 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 function openEndpointInNewTab(context: vscode.ExtensionContext, endpoint: ApiEndpoint): void {
   const title = `${endpoint.method.toUpperCase()} ${endpoint.summary || endpoint.path}`;
   const panel = ApiPanel.createNew(context.extensionUri, title);
+  setupNewTabHandlers(panel);
 
   const apiFile = apiFiles.find(f => f.filePath === endpoint.filePath);
   const servers = apiFile?.servers || [];
   const components = apiFile?.components;
 
   panel.showEndpoint(endpoint, servers, components);
-  setupNewTabHandlers(panel);
   syncPanelEnvironments(panel);
 }
 
 function openApiFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const title = apiFile.title || apiFile.fileName;
   const panel = ApiPanel.createNew(context.extensionUri, title);
+  setupNewTabHandlers(panel);
   const isCanonicalApiFile = apiFile.fileName.toLowerCase() === 'api.json';
 
   panel.showApiFile({
@@ -1415,19 +1454,18 @@ function openApiFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile)
     servers: apiFile.servers || [],
     spec: apiFile.spec
   });
-  setupNewTabHandlers(panel);
   syncPanelEnvironments(panel);
 }
 
 function openSchemaFileInNewTab(context: vscode.ExtensionContext, apiFile: ApiFile): void {
   const title = apiFile.title || apiFile.fileName;
   const panel = ApiPanel.createNew(context.extensionUri, title);
+  setupNewTabHandlers(panel);
 
   panel.showSchemaFile({
     filePath: apiFile.filePath,
     title: apiFile.title,
     components: apiFile.components || {}
   });
-  setupNewTabHandlers(panel);
   syncPanelEnvironments(panel);
 }

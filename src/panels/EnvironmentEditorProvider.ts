@@ -132,7 +132,10 @@ export class EnvironmentEditorProvider implements vscode.CustomTextEditorProvide
 
     this.inUpdateMode = true;
     try {
-      await vscode.workspace.applyEdit(edit);
+      const applied = await vscode.workspace.applyEdit(edit);
+      if (applied) {
+        await document.save();
+      }
     } finally {
       this.inUpdateMode = false;
     }

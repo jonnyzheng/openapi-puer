@@ -175,7 +175,7 @@
       if (environment.id === state.activeEnvironmentId) {
         const pill = document.createElement('span');
         pill.className = 'active-pill';
-        pill.textContent = 'ACTIVE';
+        pill.textContent = 'DEFAULT';
         body.appendChild(pill);
       }
 
@@ -251,7 +251,7 @@
     const activeButton = document.createElement('button');
     activeButton.type = 'button';
     activeButton.className = selected.id === state.activeEnvironmentId ? 'secondary-btn' : 'primary-btn';
-    activeButton.textContent = selected.id === state.activeEnvironmentId ? 'Active Environment' : 'Set Active';
+    activeButton.textContent = selected.id === state.activeEnvironmentId ? 'Default Environment' : 'Set default';
     activeButton.disabled = selected.id === state.activeEnvironmentId;
     activeButton.addEventListener('click', () => {
       state.activeEnvironmentId = selected.id;

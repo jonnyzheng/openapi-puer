@@ -21,12 +21,17 @@ export class ApiPanel {
   private currentEndpoint: ApiEndpoint | undefined;
   private onSendRequestEmitter = new vscode.EventEmitter<RequestConfig>();
   readonly onSendRequest = this.onSendRequestEmitter.event;
+  private onCopyCurlEmitter = new vscode.EventEmitter<RequestConfig>();
+  readonly onCopyCurl = this.onCopyCurlEmitter.event;
 
   private onSetActiveEnvironmentEmitter = new vscode.EventEmitter<{ id?: string }>();
   readonly onSetActiveEnvironment = this.onSetActiveEnvironmentEmitter.event;
 
   private onOpenEnvironmentManagerEmitter = new vscode.EventEmitter<void>();
   readonly onOpenEnvironmentManager = this.onOpenEnvironmentManagerEmitter.event;
+
+  private onRequestEnvironmentsEmitter = new vscode.EventEmitter<void>();
+  readonly onRequestEnvironments = this.onRequestEnvironmentsEmitter.event;
 
   private _webviewReady: boolean = false;
   private _messageQueue: WebviewMessage[] = [];
@@ -451,11 +456,17 @@ export class ApiPanel {
       case 'sendRequest':
         this.onSendRequestEmitter.fire(message.payload as RequestConfig);
         break;
+      case 'copyCurl':
+        this.onCopyCurlEmitter.fire(message.payload as RequestConfig);
+        break;
       case 'setActiveEnvironment':
         this.onSetActiveEnvironmentEmitter.fire(message.payload as { id?: string });
         break;
       case 'openEnvironmentManager':
         this.onOpenEnvironmentManagerEmitter.fire();
+        break;
+      case 'requestEnvironments':
+        this.onRequestEnvironmentsEmitter.fire();
         break;
       case 'updateOverview':
         this.onUpdateOverviewEmitter.fire(message.payload as {
@@ -859,19 +870,21 @@ export class ApiPanel {
       <div id="request-tab" class="main-tab-content">
         <div id="request-builder">
           <div id="base-url-row">
-            <label for="base-url">Base URL</label>
-            <div id="base-url-send">
-              <input type="text" id="base-url" placeholder="https://api.example.com">
+            <div id="base-url-path-line">
+              <input type="text" id="base-url" placeholder="{{baseUrl}}/path/to/endpoint">
               <button id="send-btn" class="primary-btn">Send</button>
               <button id="cancel-btn" class="secondary-btn" style="display: none;">Cancel</button>
               <span id="loading-indicator" style="display: none;">Sending...</span>
             </div>
+            <div id="request-validation-message" style="display:none; margin-top:6px; padding:6px 8px; border-radius:4px; border:1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)); background:var(--vscode-inputValidation-errorBackground, rgba(244, 71, 71, 0.15)); color:var(--vscode-errorForeground); font-size:12px;"></div>
           </div>
           <div id="request-tabs" class="request-tabs">
             <button class="request-tab-btn active" data-req-tab="params">Params</button>
             <button class="request-tab-btn" data-req-tab="body">Body</button>
             <button class="request-tab-btn" data-req-tab="headers">Headers</button>
+            <button class="request-tab-btn" data-req-tab="auth">Auth</button>
             <button class="request-tab-btn" data-req-tab="cookies">Cookies</button>
+            <button class="request-tab-btn" data-req-tab="settings">Settings</button>
           </div>
 
           <div id="req-params-tab" class="request-tab-content active">
@@ -909,6 +922,19 @@ export class ApiPanel {
             <button id="add-header" class="add-btn">+ Add Header</button>
           </div>
 
+          <div id="req-auth-tab" class="request-tab-content">
+            <div class="auth-row" style="display:flex; align-items:center; gap:8px;">
+              <label for="req-auth-type" style="min-width:100px; font-size:12px; color:var(--vscode-descriptionForeground);">Type</label>
+              <select id="req-auth-type" style="flex:1;">
+                <option value="none">No Auth</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="basic">Basic Auth</option>
+                <option value="api-key">API Key</option>
+              </select>
+            </div>
+            <div id="req-auth-fields" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+
           <div id="req-cookies-tab" class="request-tab-content">
             <table id="req-cookies-table" class="request-param-table">
               <thead>
@@ -923,6 +949,13 @@ export class ApiPanel {
               <tbody></tbody>
             </table>
             <button id="add-cookie" class="add-btn">+ Add Cookie</button>
+          </div>
+
+          <div id="req-settings-tab" class="request-tab-content">
+            <div class="request-setting-row">
+              <label for="req-timeout-ms">Timeout (ms)</label>
+              <input type="number" id="req-timeout-ms" min="1" step="100" value="30000">
+            </div>
           </div>
 
         </div>
@@ -1018,8 +1051,10 @@ export class ApiPanel {
     }
 
     this.onSendRequestEmitter.dispose();
+    this.onCopyCurlEmitter.dispose();
     this.onSetActiveEnvironmentEmitter.dispose();
     this.onOpenEnvironmentManagerEmitter.dispose();
+    this.onRequestEnvironmentsEmitter.dispose();
     this.onUpdateOverviewEmitter.dispose();
     this.onUpdateParameterEmitter.dispose();
     this.onAddParameterEmitter.dispose();
