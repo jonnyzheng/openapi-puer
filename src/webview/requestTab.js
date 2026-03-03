@@ -6,6 +6,7 @@
   S._environmentVariables = [];
   S._activeEnvironmentBaseUrl = '';
   S._requestEndpointServers = [];
+  S._requestUrlTemplate = '';
   S._lastEnvironments = [];
   S._lastActiveEnvironmentId = undefined;
   S._variableAutocomplete = {
@@ -81,6 +82,7 @@
 
   function getVariableFieldElements() {
     return Array.from(document.querySelectorAll([
+      '#base-url',
       '#req-path-params input[type="text"]',
       '#req-query-params-table input[type="text"]',
       '#req-headers-table input[type="text"]',
@@ -350,17 +352,90 @@
     return defaultBase.replace(/\/$/, '') + endpointPath;
   }
 
+  function toTemplateRequestUrl(urlValue) {
+    const value = typeof urlValue === 'string' ? urlValue : '';
+    const normalizedBaseUrl = (S._activeEnvironmentBaseUrl || '').replace(/\/$/, '');
+    if (!value || !normalizedBaseUrl) {
+      return value;
+    }
+
+    if (!value.startsWith(normalizedBaseUrl)) {
+      return value;
+    }
+
+    const nextChar = value.charAt(normalizedBaseUrl.length);
+    if (value.length === normalizedBaseUrl.length || nextChar === '/' || nextChar === '?' || nextChar === '#') {
+      return '{{baseUrl}}' + value.slice(normalizedBaseUrl.length);
+    }
+
+    return value;
+  }
+
+  function resolveRequestUrlVariables(urlValue) {
+    const value = typeof urlValue === 'string' ? urlValue : '';
+    if (!value) {
+      return '';
+    }
+
+    return value.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, function(match, variableName) {
+      if (variableName.toLowerCase() === 'baseurl' && S._activeEnvironmentBaseUrl) {
+        return S._activeEnvironmentBaseUrl;
+      }
+      return match;
+    });
+  }
+
+  function syncRequestUrlInputDisplay(input) {
+    if (!input) {
+      return;
+    }
+
+    const templateValue = S._requestUrlTemplate || '';
+    if (document.activeElement === input) {
+      input.value = templateValue;
+      return;
+    }
+
+    input.value = resolveRequestUrlVariables(templateValue);
+  }
+
   S.updateEnvironmentVariables = function(variables, activeBaseUrl) {
-    S._environmentVariables = (variables || []).map(normalizeVariableMetadata).filter(function(variable) {
+    const environmentVariables = (variables || []).map(normalizeVariableMetadata).filter(function(variable) {
       return variable.key;
     });
     S._activeEnvironmentBaseUrl = typeof activeBaseUrl === 'string' ? activeBaseUrl : '';
 
+    const hasBaseUrlVariable = environmentVariables.some(function(variable) {
+      return variable.key.toLowerCase() === 'baseurl';
+    });
+
+    if (S._activeEnvironmentBaseUrl && !hasBaseUrlVariable) {
+      environmentVariables.push({
+        key: 'baseUrl',
+        description: 'Active environment base URL',
+        type: 'url',
+        isSecret: false
+      });
+    }
+
+    S._environmentVariables = environmentVariables;
+
     const requestUrlInput = document.getElementById('base-url');
-    if (requestUrlInput && S.currentEndpoint && !requestUrlInput.value.trim()) {
-      requestUrlInput.value = buildDefaultRequestUrl(S.currentEndpoint, S._requestEndpointServers);
+    if (requestUrlInput) {
+      if (!S._requestUrlTemplate && requestUrlInput.value.trim()) {
+        S._requestUrlTemplate = toTemplateRequestUrl(requestUrlInput.value);
+      }
+      if (!S._requestUrlTemplate && S.currentEndpoint) {
+        S._requestUrlTemplate = buildDefaultRequestUrl(S.currentEndpoint, S._requestEndpointServers);
+      }
+      syncRequestUrlInputDisplay(requestUrlInput);
     }
     S.setupVariableFieldEnhancements();
+
+    if (S._variableAutocomplete.isVisible && S._variableAutocomplete.activeInput) {
+      maybeOpenVariableAutocomplete(S._variableAutocomplete.activeInput);
+    }
+
     S.updateRequestUrlPreview();
   };
 
@@ -432,6 +507,20 @@
     return collected;
   }
 
+  function splitRequestUrlParts(rawUrl) {
+    const value = typeof rawUrl === 'string' ? rawUrl : '';
+    const hashIndex = value.indexOf('#');
+    const hashPart = hashIndex === -1 ? '' : value.slice(hashIndex);
+    const withoutHash = hashIndex === -1 ? value : value.slice(0, hashIndex);
+    const queryIndex = withoutHash.indexOf('?');
+
+    return {
+      basePart: queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex),
+      queryPart: queryIndex === -1 ? '' : withoutHash.slice(queryIndex + 1),
+      hashPart
+    };
+  }
+
   function upsertHeaderParam(headers, key, value) {
     const normalized = key.toLowerCase();
     const existing = headers.find(function(header) {
@@ -490,7 +579,38 @@
   };
 
   S.updateRequestUrlPreview = function() {
-    return;
+    const requestUrlInput = document.getElementById('base-url');
+    if (!requestUrlInput) {
+      return;
+    }
+
+    const currentTemplateUrl = document.activeElement === requestUrlInput
+      ? requestUrlInput.value
+      : (S._requestUrlTemplate || toTemplateRequestUrl(requestUrlInput.value));
+
+    if (!currentTemplateUrl.trim()) {
+      S._requestUrlTemplate = '';
+      return;
+    }
+
+    const urlParts = splitRequestUrlParts(currentTemplateUrl);
+    const queryParams = collectRequestParams('req-query-params-table').filter(function(param) {
+      return param.enabled && param.key;
+    });
+    const authState = S._requestAuthState || {};
+
+    if (authState.type === 'api-key' && authState.apiKeyIn === 'query' && authState.apiKeyName) {
+      upsertQueryParam(queryParams, authState.apiKeyName, authState.apiKeyValue || '');
+    }
+
+    const queryString = queryParams
+      .map(function(param) {
+        return `${encodeURIComponent(param.key)}=${encodeURIComponent(param.value || '')}`;
+      })
+      .join('&');
+
+    S._requestUrlTemplate = urlParts.basePart + (queryString ? `?${queryString}` : '') + urlParts.hashPart;
+    syncRequestUrlInputDisplay(requestUrlInput);
   };
 
   S._renderRequestAuthFields = function() {
@@ -600,9 +720,22 @@
     const baseUrlInput = document.getElementById('base-url');
     if (baseUrlInput && baseUrlInput.dataset.requestBound !== 'true') {
       baseUrlInput.dataset.requestBound = 'true';
+      if (!S._requestUrlTemplate && baseUrlInput.value.trim()) {
+        S._requestUrlTemplate = toTemplateRequestUrl(baseUrlInput.value);
+      }
+      baseUrlInput.addEventListener('focus', function() {
+        if (!S._requestUrlTemplate && baseUrlInput.value.trim()) {
+          S._requestUrlTemplate = toTemplateRequestUrl(baseUrlInput.value);
+        }
+        syncRequestUrlInputDisplay(baseUrlInput);
+      });
       baseUrlInput.addEventListener('input', function() {
+        S._requestUrlTemplate = baseUrlInput.value;
         S.clearRequestValidationError();
-        S.updateRequestUrlPreview();
+      });
+      baseUrlInput.addEventListener('blur', function() {
+        S._requestUrlTemplate = baseUrlInput.value;
+        syncRequestUrlInputDisplay(baseUrlInput);
       });
     }
 
@@ -708,10 +841,10 @@
     }
 
     S._requestEndpointServers = Array.isArray(servers) ? servers : [];
-    const defaultRequestUrl = buildDefaultRequestUrl(endpoint, S._requestEndpointServers);
+    S._requestUrlTemplate = buildDefaultRequestUrl(endpoint, S._requestEndpointServers);
     if (baseUrlInput) {
       removeVariableOverlayWrapper(baseUrlInput);
-      baseUrlInput.value = defaultRequestUrl;
+      syncRequestUrlInputDisplay(baseUrlInput);
       baseUrlInput.placeholder = '{{baseUrl}}/path/to/endpoint';
     }
     if (timeoutInput) {
@@ -920,8 +1053,15 @@
 
     S.clearRequestValidationError();
 
-    const requestUrl = requestUrlInput.value.trim();
+    const requestUrl = (S._requestUrlTemplate || toTemplateRequestUrl(requestUrlInput.value)).trim();
     if (!requestUrl) {
+      S.showRequestValidationError('Request URL is required.', 'params');
+      return null;
+    }
+
+    const requestUrlParts = splitRequestUrlParts(requestUrl);
+    const requestUrlBase = requestUrlParts.basePart.trim();
+    if (!requestUrlBase) {
       S.showRequestValidationError('Request URL is required.', 'params');
       return null;
     }
@@ -957,6 +1097,15 @@
 
     // Query params
     const queryParams = collectRequestParams('req-query-params-table');
+    if (requestUrlParts.queryPart) {
+      const parsedQuery = new URLSearchParams(requestUrlParts.queryPart);
+      parsedQuery.forEach(function(value, key) {
+        if (!key) {
+          return;
+        }
+        upsertQueryParam(queryParams, key, value);
+      });
+    }
 
     // Headers
     const headers = collectRequestParams('req-headers-table');
@@ -1069,7 +1218,7 @@
     }
 
     return {
-      requestUrl,
+      requestUrl: requestUrlBase,
       baseUrl: '',
       path: '',
       method: S.currentEndpoint.method,
