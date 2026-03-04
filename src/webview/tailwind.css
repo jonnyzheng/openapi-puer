@@ -1415,6 +1415,34 @@ input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
   gap: 4px;
 }
 
+#response-action-buttons {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#response-action-buttons .response-copy-btn {
+  position: relative;
+}
+
+#response-action-buttons .response-copy-btn.show-copied-tooltip::after {
+  content: 'copied';
+  position: absolute;
+  top: -24px;
+  right: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border));
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+  z-index: 1;
+  pointer-events: none;
+}
+
 #response-toolbar button {
   padding: 4px 8px;
   background-color: var(--vscode-button-secondaryBackground);

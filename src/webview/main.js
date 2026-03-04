@@ -151,6 +151,9 @@
         }
         break;
       case 'overviewSaved':
+        if (typeof S.handleCopyCurlResult === 'function') {
+          S.handleCopyCurlResult(message.payload.success, message.payload.message);
+        }
         S.showSaveStatus(message.payload.success, message.payload.message);
         break;
       case 'updateServers':

@@ -327,7 +327,7 @@ Welcome to your API documentation workspace! This folder is configured for use w
 │   └── schemas/              # Reusable schema definitions
 ├── paths/                   # API endpoint definitions
 ├── api.json                 # API main file, servers, info, enviroments, etc.
-├── README.md                # Readme file for API documentation
+├── README.md                # Readme file (this file), user can update filestructure and content as they wish
 \`\`\`
 
 ### .openapi-puer/
@@ -385,8 +385,6 @@ Edit \`.openapi-puer/environments.json\` to define variables that can be used in
           "type": "text"
         }
       ],
-      "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z"
     },
     {
       "id": "env_prod",
@@ -402,8 +400,6 @@ Edit \`.openapi-puer/environments.json\` to define variables that can be used in
           "type": "secret"
         }
       ],
-      "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z"
     }
   ]
 }
@@ -413,7 +409,7 @@ Use variables in your requests with the \`{{variableName}}\` syntax.
 
 ## Resources
 
-- [OpenAPI Specification](https://swagger.io/specification/)
+- [OpenAPI Specification](https://spec.openapis.org/oas/)
 - [VS Code Marketplace](https://marketplace.visualstudio.com/)
 
 ---

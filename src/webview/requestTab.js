@@ -1742,25 +1742,125 @@
     </div>`;
   };
 
-  S.copyResponse = function() {
-    if (S.lastResponse) {
-      navigator.clipboard.writeText(S.lastResponse.body);
+  function showCopiedTooltip(targetButton) {
+    if (!(targetButton instanceof HTMLElement)) {
+      return;
+    }
+
+    const existingTimer = targetButton.dataset.copiedTooltipTimer;
+    if (existingTimer) {
+      window.clearTimeout(Number(existingTimer));
+    }
+
+    targetButton.classList.add('show-copied-tooltip');
+    const tooltipTimer = window.setTimeout(() => {
+      targetButton.classList.remove('show-copied-tooltip');
+      delete targetButton.dataset.copiedTooltipTimer;
+    }, 1200);
+    targetButton.dataset.copiedTooltipTimer = String(tooltipTimer);
+  }
+
+  function normalizeContentType(contentType) {
+    if (typeof contentType !== 'string') {
+      return '';
+    }
+
+    return contentType.split(';')[0].trim().toLowerCase();
+  }
+
+  function parseExampleValue(body, contentType) {
+    if (typeof body !== 'string' || !contentType.includes('json')) {
+      return body;
+    }
+
+    try {
+      return JSON.parse(body);
+    } catch {
+      return body;
+    }
+  }
+
+  S.handleCopyCurlResult = function(success, message) {
+    if (!S._pendingCopyCurlButton) {
+      return;
+    }
+
+    const targetButton = S._pendingCopyCurlButton;
+    S._pendingCopyCurlButton = null;
+
+    if (success && message === 'cURL copied') {
+      showCopiedTooltip(targetButton);
     }
   };
 
-  S.copyCurl = function() {
+  S.copyResponse = function(event) {
+    if (!S.lastResponse) {
+      return;
+    }
+
+    const targetButton = event && event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    navigator.clipboard.writeText(S.lastResponse.body).then(() => {
+      showCopiedTooltip(targetButton);
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : 'Failed to copy response';
+      if (typeof S.showSaveStatus === 'function') {
+        S.showSaveStatus(false, message);
+      }
+    });
+  };
+
+  S.copyCurl = function(event) {
       if (!S.currentEndpoint) return;
-  
+
       const config = S.buildRequestConfig();
       if (!config) return;
-  
+
+      S._pendingCopyCurlButton = event && event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
       S.vscode.postMessage({ type: 'copyCurl', payload: config });
     };
 
   S.saveResponse = function() {
-    if (S.lastResponse) {
-      S.vscode.postMessage({ type: 'saveResponse', payload: S.lastResponse });
+    if (!S.currentEndpoint || !S.lastResponse) {
+      return;
     }
+
+    const statusCode = String(S.lastResponse.status);
+    const endpointResponses = Array.isArray(S.currentEndpoint.responses) ? S.currentEndpoint.responses : [];
+    const existingResponse = endpointResponses.find(response => response.statusCode === statusCode);
+    const sourceJson = existingResponse && existingResponse._source && typeof existingResponse._source === 'object'
+      ? JSON.parse(JSON.stringify(existingResponse._source))
+      : {};
+
+    if (!sourceJson.description) {
+      sourceJson.description = existingResponse?.description || `Response for status ${statusCode}`;
+    }
+
+    if (!sourceJson.content || typeof sourceJson.content !== 'object') {
+      sourceJson.content = {};
+    }
+
+    const sourceContent = sourceJson.content;
+    const sourceContentTypes = Object.keys(sourceContent);
+    const existingContentTypes = existingResponse?.content ? Object.keys(existingResponse.content) : [];
+    const normalizedContentType = normalizeContentType(S.lastResponse.contentType);
+    const targetContentType = normalizedContentType || sourceContentTypes[0] || existingContentTypes[0] || 'application/json';
+
+    if (!sourceContent[targetContentType] || typeof sourceContent[targetContentType] !== 'object') {
+      sourceContent[targetContentType] = {};
+    }
+
+    sourceContent[targetContentType].example = parseExampleValue(S.lastResponse.body, targetContentType);
+
+    S.vscode.postMessage({
+      type: 'updateResponseSource',
+      payload: {
+        filePath: S.currentEndpoint.filePath,
+        path: S.currentEndpoint.path,
+        method: S.currentEndpoint.method,
+        statusCode,
+        sourceJson
+      }
+    });
   };
 
 

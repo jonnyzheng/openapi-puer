@@ -977,9 +977,11 @@ export class ApiPanel {
           <div id="response-toolbar">
             <label><input type="checkbox" id="pretty-print" checked> Pretty Print</label>
             <label><input type="checkbox" id="word-wrap"> Word Wrap</label>
-            <button id="copy-response-btn">Copy</button>
-            <button id="copy-curl-btn">Copy as cURL</button>
-            <button id="save-response-btn">Save</button>
+            <div id="response-action-buttons">
+              <button id="copy-response-btn" class="response-copy-btn">Copy</button>
+              <button id="copy-curl-btn" class="response-copy-btn">Copy as cURL</button>
+              <button id="save-response-btn">Save to example</button>
+            </div>
           </div>
           <div id="response-body-tab" class="tab-content active">
             <pre id="response-body"><code></code></pre>
