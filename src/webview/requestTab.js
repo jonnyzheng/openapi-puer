@@ -19,6 +19,37 @@
     suggestions: []
   };
 
+  const REQUEST_HEADER_KEY_SUGGESTIONS = [
+    'Accept',
+    'Accept-Charset',
+    'Accept-Encoding',
+    'Accept-Language',
+    'Authorization',
+    'Cache-Control',
+    'Connection',
+    'Content-Length',
+    'Content-Type',
+    'Cookie',
+    'Host',
+    'If-Match',
+    'If-Modified-Since',
+    'If-None-Match',
+    'Origin',
+    'Pragma',
+    'Referer',
+    'User-Agent',
+    'X-API-Key',
+    'X-Requested-With'
+  ];
+  const REQUEST_HEADER_KEY_AUTOCOMPLETE_ID = 'request-header-key-autocomplete';
+  S._requestHeaderKeyAutocomplete = {
+    isVisible: false,
+    element: null,
+    activeInput: null,
+    activeIndex: -1,
+    suggestions: []
+  };
+
   function createDefaultRequestAuthState() {
     return {
       type: 'none',
@@ -453,6 +484,28 @@
     }
   });
 
+  document.addEventListener('mousedown', function(event) {
+    const autocompleteElement = S._requestHeaderKeyAutocomplete.element;
+    const activeInput = S._requestHeaderKeyAutocomplete.activeInput;
+    if (!autocompleteElement || !S._requestHeaderKeyAutocomplete.isVisible) {
+      return;
+    }
+
+    const clickedInsideAutocomplete = autocompleteElement.contains(event.target);
+    const clickedInsideInput = activeInput ? activeInput.contains(event.target) || activeInput === event.target : false;
+    if (!clickedInsideAutocomplete && !clickedInsideInput) {
+      hideRequestHeaderKeyAutocomplete();
+    }
+  });
+
+  window.addEventListener('resize', function() {
+    repositionRequestHeaderKeyAutocompleteIfNeeded();
+  });
+
+  document.addEventListener('scroll', function() {
+    repositionRequestHeaderKeyAutocompleteIfNeeded();
+  }, true);
+
   function normalizeParameterValue(value) {
     if (value === undefined || value === null) return '';
     if (typeof value === 'string') return value;
@@ -464,6 +517,249 @@
       }
     }
     return String(value);
+  }
+
+  function isHeadersParamTable(tableBody) {
+    if (!tableBody || typeof tableBody.closest !== 'function') {
+      return false;
+    }
+
+    const ownerTable = tableBody.closest('table');
+    return ownerTable ? ownerTable.id === 'req-headers-table' : false;
+  }
+
+  function ensureRequestHeaderKeyAutocompleteElement() {
+    if (S._requestHeaderKeyAutocomplete.element) {
+      return S._requestHeaderKeyAutocomplete.element;
+    }
+
+    const element = document.createElement('div');
+    element.id = REQUEST_HEADER_KEY_AUTOCOMPLETE_ID;
+    element.className = 'request-header-key-autocomplete hidden';
+    document.body.appendChild(element);
+
+    S._requestHeaderKeyAutocomplete.element = element;
+    return element;
+  }
+
+  function filterRequestHeaderKeySuggestions(searchText) {
+    const normalizedSearch = (searchText || '').trim().toLowerCase();
+    if (!normalizedSearch) {
+      return REQUEST_HEADER_KEY_SUGGESTIONS.slice();
+    }
+
+    return REQUEST_HEADER_KEY_SUGGESTIONS.filter(function(headerKey) {
+      return headerKey.toLowerCase().includes(normalizedSearch);
+    });
+  }
+
+  function positionRequestHeaderKeyAutocomplete(element, input) {
+    const inputRect = input.getBoundingClientRect();
+    const viewportPadding = 8;
+    const maxWidth = Math.max(inputRect.width, 220);
+    const dropdownHeight = Math.min(element.scrollHeight || 0, 220) || 40;
+    const spaceBelow = window.innerHeight - inputRect.bottom - viewportPadding;
+    const spaceAbove = inputRect.top - viewportPadding;
+    const showAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+    const safeLeft = Math.max(viewportPadding, Math.min(inputRect.left, window.innerWidth - maxWidth - viewportPadding));
+    const preferredTop = showAbove
+      ? inputRect.top - dropdownHeight - 4
+      : inputRect.bottom + 4;
+    const safeTop = Math.max(viewportPadding, Math.min(preferredTop, window.innerHeight - dropdownHeight - viewportPadding));
+
+    element.style.position = 'fixed';
+    element.style.minWidth = `${maxWidth}px`;
+    element.style.maxWidth = `${Math.max(maxWidth, 340)}px`;
+    element.style.left = `${safeLeft}px`;
+    element.style.top = `${safeTop}px`;
+    element.style.zIndex = '1100';
+  }
+
+  function renderRequestHeaderKeyAutocompleteItems() {
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    const element = ensureRequestHeaderKeyAutocompleteElement();
+    element.innerHTML = '';
+
+    if (!autocomplete.suggestions.length) {
+      const empty = document.createElement('div');
+      empty.className = 'request-header-key-autocomplete-empty';
+      empty.textContent = 'No matching headers';
+      element.appendChild(empty);
+      return;
+    }
+
+    autocomplete.suggestions.forEach(function(headerKey, index) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `request-header-key-autocomplete-item${index === autocomplete.activeIndex ? ' active' : ''}`;
+      item.textContent = headerKey;
+      item.addEventListener('mousedown', function(event) {
+        event.preventDefault();
+      });
+      item.addEventListener('click', function() {
+        applyRequestHeaderKeySuggestion(headerKey);
+      });
+      element.appendChild(item);
+    });
+  }
+
+  function hideRequestHeaderKeyAutocomplete() {
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    const activeInput = autocomplete.activeInput;
+
+    autocomplete.isVisible = false;
+    autocomplete.activeInput = null;
+    autocomplete.activeIndex = -1;
+    autocomplete.suggestions = [];
+
+    if (activeInput) {
+      activeInput.removeAttribute('aria-expanded');
+      activeInput.removeAttribute('aria-controls');
+    }
+
+    if (autocomplete.element) {
+      autocomplete.element.classList.add('hidden');
+      autocomplete.element.innerHTML = '';
+    }
+  }
+
+  function showRequestHeaderKeyAutocomplete(input) {
+    if (!input || !input.classList.contains('req-header-key-input')) {
+      hideRequestHeaderKeyAutocomplete();
+      return;
+    }
+
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    const previousInput = autocomplete.activeInput;
+    if (previousInput && previousInput !== input) {
+      previousInput.removeAttribute('aria-expanded');
+      previousInput.removeAttribute('aria-controls');
+    }
+
+    const suggestions = filterRequestHeaderKeySuggestions(input.value);
+    if (!suggestions.length) {
+      hideRequestHeaderKeyAutocomplete();
+      return;
+    }
+
+    autocomplete.isVisible = true;
+    autocomplete.activeInput = input;
+    autocomplete.suggestions = suggestions;
+    autocomplete.activeIndex = autocomplete.suggestions.length ? 0 : -1;
+
+    const element = ensureRequestHeaderKeyAutocompleteElement();
+    element.classList.remove('hidden');
+
+    renderRequestHeaderKeyAutocompleteItems();
+    positionRequestHeaderKeyAutocomplete(element, input);
+
+    input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-controls', REQUEST_HEADER_KEY_AUTOCOMPLETE_ID);
+  }
+
+  function applyRequestHeaderKeySuggestion(headerKey) {
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    const input = autocomplete.activeInput;
+    if (!input) {
+      hideRequestHeaderKeyAutocomplete();
+      return;
+    }
+
+    input.value = headerKey;
+    input.focus();
+    if (typeof input.setSelectionRange === 'function') {
+      const cursorPosition = headerKey.length;
+      input.setSelectionRange(cursorPosition, cursorPosition);
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    hideRequestHeaderKeyAutocomplete();
+  }
+
+  function handleRequestHeaderKeyAutocompleteKeydown(event) {
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    if (!autocomplete.isVisible || autocomplete.activeInput !== event.target) {
+      return false;
+    }
+
+    if (event.key === 'ArrowDown') {
+      if (!autocomplete.suggestions.length) {
+        return false;
+      }
+      event.preventDefault();
+      autocomplete.activeIndex = Math.min(autocomplete.activeIndex + 1, autocomplete.suggestions.length - 1);
+      renderRequestHeaderKeyAutocompleteItems();
+      return true;
+    }
+
+    if (event.key === 'ArrowUp') {
+      if (!autocomplete.suggestions.length) {
+        return false;
+      }
+      event.preventDefault();
+      autocomplete.activeIndex = Math.max(autocomplete.activeIndex - 1, 0);
+      renderRequestHeaderKeyAutocompleteItems();
+      return true;
+    }
+
+    if (event.key === 'Enter') {
+      if (autocomplete.activeIndex < 0 || !autocomplete.suggestions[autocomplete.activeIndex]) {
+        return false;
+      }
+      event.preventDefault();
+      applyRequestHeaderKeySuggestion(autocomplete.suggestions[autocomplete.activeIndex]);
+      return true;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      hideRequestHeaderKeyAutocomplete();
+      return true;
+    }
+
+    return false;
+  }
+
+  function bindRequestHeaderKeyInput(input) {
+    if (!input || input.dataset.headerKeyAutocompleteBound === 'true') {
+      return;
+    }
+
+    input.dataset.headerKeyAutocompleteBound = 'true';
+    input.addEventListener('focus', function() {
+      showRequestHeaderKeyAutocomplete(input);
+    });
+    input.addEventListener('click', function() {
+      showRequestHeaderKeyAutocomplete(input);
+    });
+    input.addEventListener('input', function() {
+      showRequestHeaderKeyAutocomplete(input);
+    });
+    input.addEventListener('keydown', function(event) {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (handleRequestHeaderKeyAutocompleteKeydown(event)) {
+        return;
+      }
+      if (event.key === 'Tab') {
+        hideRequestHeaderKeyAutocomplete();
+      }
+    });
+  }
+
+  function repositionRequestHeaderKeyAutocompleteIfNeeded() {
+    const autocomplete = S._requestHeaderKeyAutocomplete;
+    if (!autocomplete.isVisible) {
+      return;
+    }
+
+    if (!autocomplete.activeInput || !autocomplete.activeInput.isConnected) {
+      hideRequestHeaderKeyAutocomplete();
+      return;
+    }
+
+    const element = ensureRequestHeaderKeyAutocompleteElement();
+    positionRequestHeaderKeyAutocomplete(element, autocomplete.activeInput);
   }
 
   function getInitialParameterValue(paramDef) {
@@ -835,6 +1131,8 @@
     const baseUrlInput = document.getElementById('base-url');
     const timeoutInput = document.getElementById('req-timeout-ms');
 
+    hideRequestHeaderKeyAutocomplete();
+
     if (S._requestAuthEndpointId !== endpoint.id) {
       S._requestAuthState = createDefaultRequestAuthState();
       S._requestAuthEndpointId = endpoint.id;
@@ -1006,18 +1304,27 @@
     }
 
     const row = document.createElement('tr');
+    const isHeadersTable = isHeadersParamTable(table);
+    const keyInputClassName = isHeadersTable ? 'req-custom-key req-header-key-input' : 'req-custom-key';
     row.innerHTML = `
       <td><input type="checkbox" checked></td>
-      <td><input type="text" value="" placeholder="Key" class="req-custom-key"></td>
+      <td><input type="text" value="" placeholder="Key" class="${keyInputClassName}"></td>
       <td><input type="text" value="" placeholder="Value"></td>
       <td></td>
       <td><button class="delete-btn">×</button></td>
     `;
+    const headerKeyInput = row.querySelector('.req-header-key-input');
     row.querySelector('.delete-btn').addEventListener('click', function() {
+      if (headerKeyInput && S._requestHeaderKeyAutocomplete.activeInput === headerKeyInput) {
+        hideRequestHeaderKeyAutocomplete();
+      }
       row.remove();
       S.updateRequestUrlPreview();
     });
     table.appendChild(row);
+    if (headerKeyInput) {
+      bindRequestHeaderKeyInput(headerKeyInput);
+    }
     S.setupVariableFieldEnhancements();
     S.updateRequestUrlPreview();
   };

@@ -1191,6 +1191,49 @@ input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
+.request-header-key-autocomplete {
+  position: fixed;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.request-header-key-autocomplete.hidden {
+  display: none;
+}
+
+.request-header-key-autocomplete-item {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: transparent;
+  color: var(--vscode-foreground);
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.request-header-key-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.request-header-key-autocomplete-item:hover,
+.request-header-key-autocomplete-item.active {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.request-header-key-autocomplete-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
 #req-query-params-table input, #req-headers-table input, #req-cookies-table input {
   width: 100%;
 }
