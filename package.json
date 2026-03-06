@@ -121,6 +121,12 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "openapi-puer.renameItem",
+        "title": "Rename",
+        "category": "OpenAPI Puer",
+        "icon": "$(edit)"
+      },
+      {
         "command": "openapi-puer.deleteItem",
         "title": "Delete",
         "category": "OpenAPI Puer",
@@ -169,6 +175,13 @@
         "icon": "$(tools)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "openapi-puer.renameItem",
+        "key": "f2",
+        "when": "listFocus && view == openapi-puer.apiExplorer && !inputFocus && (viewItem == folder || viewItem == file || viewItem == file-api || viewItem == file-schema || viewItem == file-parameter || viewItem == file-error)"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -209,6 +222,11 @@
           "group": "1_add@2"
         },
         {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
+          "group": "1_add@3"
+        },
+        {
           "command": "openapi-puer.deleteItem",
           "when": "view == openapi-puer.apiExplorer && viewItem == folder",
           "group": "2_delete"
@@ -229,9 +247,19 @@
           "group": "1_actions@2"
         },
         {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
+          "group": "1_actions@3"
+        },
+        {
           "command": "openapi-puer.viewSourceCode",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
           "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "1_actions@2"
         },
         {
           "command": "openapi-puer.deleteItem",
@@ -247,6 +275,11 @@
           "command": "openapi-puer.deleteItem",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
           "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
+          "group": "1_actions@2"
         },
         {
           "command": "openapi-puer.viewSourceCode",
@@ -257,6 +290,11 @@
           "command": "openapi-puer.addModel",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
           "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@3"
         },
         {
           "command": "openapi-puer.deleteItem",
@@ -282,6 +320,11 @@
           "command": "openapi-puer.viewSourceCode",
           "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
           "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "1_actions@2"
         },
         {
           "command": "openapi-puer.deleteItem",

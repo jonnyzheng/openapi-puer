@@ -19,6 +19,10 @@ let treeProvider: ApiTreeProvider;
 let apiFiles: ApiFile[] = [];
 let panelHandlersRegistered = false;
 
+const ADD_ENDPOINT_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
+const LAST_ADD_ENDPOINT_METHOD_KEY = 'openapi-puer.lastAddEndpointMethod';
+const LAST_ADD_ENDPOINT_PATH_KEY = 'openapi-puer.lastAddEndpointPath';
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('OpenAPI Puer extension is now active!');
 
@@ -380,6 +384,78 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const renameItemCommand = vscode.commands.registerCommand('openapi-puer.renameItem', async (item?: ApiTreeItem) => {
+    const targetItem = item ?? treeView.selection[0];
+
+    if (!targetItem) {
+      vscode.window.showInformationMessage('Select a file or folder in API Explorer to rename.');
+      return;
+    }
+
+    let itemPath: string | undefined;
+    let itemType: 'folder' | 'file' | undefined;
+
+    if (targetItem.itemType === 'folder' && targetItem.folderPath) {
+      itemPath = targetItem.folderPath;
+      itemType = 'folder';
+    } else if (targetItem.itemType === 'file' && targetItem.apiFile) {
+      itemPath = targetItem.apiFile.filePath;
+      itemType = 'file';
+    }
+
+    if (!itemPath || !itemType) {
+      vscode.window.showInformationMessage('Rename is only available for files and folders.');
+      return;
+    }
+
+    const currentName = path.basename(itemPath);
+    const displayItemType = itemType === 'folder' ? 'Folder' : 'File';
+
+    const newNameInput = await vscode.window.showInputBox({
+      prompt: `Enter new ${itemType} name`,
+      value: currentName,
+      validateInput: (value) => {
+        const trimmedValue = value.trim();
+        if (!trimmedValue) {
+          return `${displayItemType} name is required`;
+        }
+        if (/[<>:"/\\|?*]/.test(trimmedValue)) {
+          return `${displayItemType} name contains invalid characters`;
+        }
+        if (trimmedValue === '.' || trimmedValue === '..') {
+          return `${displayItemType} name is invalid`;
+        }
+        return undefined;
+      }
+    });
+
+    if (newNameInput === undefined) {
+      return;
+    }
+
+    const newName = newNameInput.trim();
+    if (newName === currentName) {
+      return;
+    }
+
+    const sourceUri = vscode.Uri.file(itemPath);
+    const targetPath = path.join(path.dirname(itemPath), newName);
+    const targetUri = vscode.Uri.file(targetPath);
+
+    try {
+      await vscode.workspace.fs.rename(sourceUri, targetUri, { overwrite: false });
+      await refreshApiFiles();
+      vscode.window.showInformationMessage(`${displayItemType} renamed to "${newName}"`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/exist/i.test(message)) {
+        vscode.window.showErrorMessage(`A ${itemType} named "${newName}" already exists.`);
+        return;
+      }
+      vscode.window.showErrorMessage(`Failed to rename ${itemType}: ${message}`);
+    }
+  });
+
   const deleteItemCommand = vscode.commands.registerCommand('openapi-puer.deleteItem', async (item?: ApiTreeItem) => {
     if (!item) {
       return;
@@ -440,20 +516,32 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const filePath = item.apiFile.filePath;
+    const lastMethod = context.workspaceState.get<string>(LAST_ADD_ENDPOINT_METHOD_KEY, 'get');
+    const methods = [
+      ...ADD_ENDPOINT_METHODS.filter(method => method === lastMethod),
+      ...ADD_ENDPOINT_METHODS.filter(method => method !== lastMethod)
+    ];
 
     // Get HTTP method
     const method = await vscode.window.showQuickPick(
-      ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'],
-      { placeHolder: 'Select HTTP method' }
+      methods,
+      {
+        title: 'Add Endpoint (1/3)',
+        placeHolder: 'Select HTTP method'
+      }
     );
 
     if (!method) {
       return;
     }
 
+    const lastPath = context.workspaceState.get<string>(LAST_ADD_ENDPOINT_PATH_KEY, '/');
+
     // Get endpoint path
-    const endpointPath = await vscode.window.showInputBox({
+    const endpointPathInput = await vscode.window.showInputBox({
+      title: 'Add Endpoint (2/3)',
       prompt: 'Enter endpoint path',
+      value: lastPath,
       placeHolder: 'e.g., /users, /users/{id}, /orders/{orderId}/items',
       validateInput: (value) => {
         if (!value || value.trim() === '') {
@@ -466,18 +554,31 @@ export function activate(context: vscode.ExtensionContext) {
       }
     });
 
-    if (!endpointPath) {
+    if (endpointPathInput === undefined) {
       return;
     }
 
+    const endpointPath = endpointPathInput.trim();
+    const suggestedSummary = buildDefaultEndpointSummary(method, endpointPath);
+
     // Get summary (optional)
-    const summary = await vscode.window.showInputBox({
+    const summaryInput = await vscode.window.showInputBox({
+      title: 'Add Endpoint (3/3)',
       prompt: 'Enter endpoint summary (optional)',
-      placeHolder: 'e.g., Get all users, Create a new order'
+      value: suggestedSummary,
+      placeHolder: suggestedSummary
     });
 
-    const result = await openApiService.addEndpoint(filePath, endpointPath.trim(), method, summary?.trim());
+    if (summaryInput === undefined) {
+      return;
+    }
+
+    const summary = summaryInput.trim();
+
+    const result = await openApiService.addEndpoint(filePath, endpointPath, method, summary || undefined);
     if (result.success) {
+      await context.workspaceState.update(LAST_ADD_ENDPOINT_METHOD_KEY, method);
+      await context.workspaceState.update(LAST_ADD_ENDPOINT_PATH_KEY, endpointPath);
       vscode.window.showInformationMessage(`Endpoint ${method.toUpperCase()} ${endpointPath} added`);
       await refreshApiFiles();
     } else {
@@ -639,6 +740,7 @@ export function activate(context: vscode.ExtensionContext) {
     setupDocsStructureCommand,
     addFolderCommand,
     addFileCommand,
+    renameItemCommand,
     deleteItemCommand,
     viewSourceCodeCommand,
     addEndpointCommand,
@@ -1154,6 +1256,34 @@ function registerPanelHandlers(panel: ApiPanel): void {
 function getOpenApiVersionValue(apiFile: ApiFile): string | undefined {
   const rawSpec = apiFile.spec as { openapi?: unknown };
   return typeof rawSpec.openapi === 'string' ? rawSpec.openapi : undefined;
+}
+
+function buildDefaultEndpointSummary(method: string, endpointPath: string): string {
+  const verbByMethod: Record<string, string> = {
+    get: 'Get',
+    post: 'Create',
+    put: 'Replace',
+    patch: 'Update',
+    delete: 'Delete',
+    head: 'Check',
+    options: 'List options',
+    trace: 'Trace'
+  };
+
+  const verb = verbByMethod[method.toLowerCase()] || method.toUpperCase();
+  const pathText = endpointPath
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter(segment => segment.length > 0)
+    .map(segment => segment.replace(/^\{(.+)\}$/, 'by $1').replace(/[-_]/g, ' '))
+    .join(' ')
+    .trim();
+
+  if (!pathText) {
+    return `${verb} endpoint`;
+  }
+
+  return `${verb} ${pathText}`;
 }
 
 function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): void {
