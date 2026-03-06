@@ -1,0 +1,9 @@
+{
+  "environments": [
+    {
+      "name": "staging",
+      "baseUrl": "https://staging.example.com",
+      "description": "Staging environment for testing"
+    }
+  ]
+}

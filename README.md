@@ -127,7 +127,7 @@ pnpm run test
 ## Packaging
 
 ```bash
-pnpm dlx vsce package
+pnpm run package:vsix
 ```
 
 This creates a .vsix file that can be installed in VS Code.

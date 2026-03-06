@@ -1,0 +1,22 @@
+{
+  "environments": [
+    {
+      "id": "env_default",
+      "name": "Default",
+      "baseUrl": "http://zz-test.com",
+      "description": "Default environment",
+      "variables": [],
+      "createdAt": "2026-03-05T00:00:00.000Z",
+      "updatedAt": "2026-03-05T00:00:00.000Z"
+    },
+    {
+      "id": "env_staging",
+      "name": "Staging",
+      "baseUrl": "https://staging.example.com",
+      "description": "Staging environment",
+      "variables": [],
+      "createdAt": "2026-03-05T00:00:00.000Z",
+      "updatedAt": "2026-03-05T00:00:00.000Z"
+    }
+  ]
+}

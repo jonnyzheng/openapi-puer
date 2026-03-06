@@ -1,11 +1,11 @@
 {
   "name": "openapi-puer",
   "displayName": "OpenAPI Puer",
-  "description": "A Postman-style API development and testing tool for VS Code. Browse, test, and debug OpenAPI endpoints directly in your editor.",
+  "description": "A GUI-style API VSCode extension for OpenAPI. Browse, test, and debug OpenAPI endpoints directly in your editor.",
   "version": "0.0.1",
   "publisher": "openapi-puer",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.108.0"
   },
   "categories": [
     "Testing",
@@ -22,7 +22,10 @@
     "api-client"
   ],
   "activationEvents": [
-    "onCustomEditor:openapi-puer.environmentsEditor"
+    "onCustomEditor:openapi-puer.environmentsEditor",
+    "onView:openapi-puer.apiExplorer",
+    "onCommand:openapi-puer.setApiFolder",
+    "onCommand:openapi-puer.setupApiFolder"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -294,14 +297,17 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && pnpm run copy:webview",
+    "copy:webview": "node ./copyWebviewAssets.mjs",
+    "bundle:extension": "esbuild ./src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=./out/extension.js --sourcemap",
     "build:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --minify",
     "watch:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --watch",
-    "build": "pnpm run build:css && pnpm run compile",
+    "build": "pnpm run build:css && pnpm run compile && pnpm run bundle:extension",
     "watch": "pnpm run watch:css & tsc -watch -p ./",
     "pretest": "pnpm run compile && pnpm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package:vsix": "pnpm dlx @vscode/vsce package --no-dependencies"
   },
   "packageManager": "pnpm@9.0.0",
   "dependencies": {
@@ -320,6 +326,7 @@
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.4.24",
+    "esbuild": "^0.25.10",
     "eslint": "^8.57.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",

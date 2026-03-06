@@ -42,6 +42,7 @@ export class EnvironmentEditorProvider implements vscode.CustomTextEditorProvide
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview'),
         vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview')
       ]
     };
@@ -308,8 +309,9 @@ export class EnvironmentEditorProvider implements vscode.CustomTextEditorProvide
   }
 
   private getHtmlForWebview(webview: vscode.Webview): string {
-    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'environmentEditor.css'));
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'environmentEditor.js'));
+    const webviewAssetRoot = vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview');
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewAssetRoot, 'environmentEditor.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewAssetRoot, 'environmentEditor.js'));
     const nonce = this.getNonce();
 
     return `<!DOCTYPE html>

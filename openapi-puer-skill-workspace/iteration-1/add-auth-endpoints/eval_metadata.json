@@ -1,0 +1,57 @@
+{
+  "eval_id": 1,
+  "eval_name": "add-auth-endpoints",
+  "prompt": "In my existing API project at debug-sample/, add a new endpoint file for user authentication. I need POST /auth/login (email + password, returns token), POST /auth/register (username, email, password), and POST /auth/logout. Also create the auth-related schemas.",
+  "assertions": [
+    {
+      "id": "auth-paths-file-exists",
+      "text": "paths/auth.json exists as a standalone OpenAPI document with openapi, info, servers, paths fields",
+      "type": "structural"
+    },
+    {
+      "id": "login-endpoint",
+      "text": "POST /auth/login endpoint exists with email and password in request body schema",
+      "type": "content"
+    },
+    {
+      "id": "register-endpoint",
+      "text": "POST /auth/register endpoint exists with username, email, and password in request body schema",
+      "type": "content"
+    },
+    {
+      "id": "logout-endpoint",
+      "text": "POST /auth/logout endpoint exists",
+      "type": "content"
+    },
+    {
+      "id": "auth-schemas-file-exists",
+      "text": "components/schemas/auth.json exists with auth-related schemas under components.schemas",
+      "type": "structural"
+    },
+    {
+      "id": "openapi-version-matches",
+      "text": "The openapi version in auth paths file matches the existing project version (3.1.1)",
+      "type": "convention"
+    },
+    {
+      "id": "operation-ids-kebab-case",
+      "text": "All operationId values use kebab-case naming",
+      "type": "convention"
+    },
+    {
+      "id": "refs-correct-format",
+      "text": "$ref values reference ../components/schemas/auth.json#/components/schemas/<Name>",
+      "type": "convention"
+    },
+    {
+      "id": "schema-names-pascal-case",
+      "text": "Schema names are PascalCase (e.g., LoginRequest, RegisterRequest)",
+      "type": "convention"
+    },
+    {
+      "id": "valid-json",
+      "text": "All JSON files are valid parseable JSON",
+      "type": "structural"
+    }
+  ]
+}

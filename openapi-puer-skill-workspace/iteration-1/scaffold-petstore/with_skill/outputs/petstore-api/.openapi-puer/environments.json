@@ -1,0 +1,13 @@
+{
+  "environments": [
+    {
+      "id": "env_default",
+      "name": "Default",
+      "baseUrl": "https://api.petstore.example.com",
+      "description": "Default environment",
+      "variables": [],
+      "createdAt": "2026-03-05T00:00:00.000Z",
+      "updatedAt": "2026-03-05T00:00:00.000Z"
+    }
+  ]
+}

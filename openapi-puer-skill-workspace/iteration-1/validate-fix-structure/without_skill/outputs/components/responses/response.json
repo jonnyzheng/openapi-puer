@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.3",
+  "responses": {
+    "successResponse": {
+      "description": "The specified resource was not found.",
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["success", "error"],
+                "default": "success"
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "description": "Authentication is required and has failed or has not yet been provided.",
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["success", "error"],
+                "default": "error"
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "InternalServerError": {
+      "description": "An unexpected error occurred on the server."
+    }
+  }
+}

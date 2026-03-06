@@ -1,0 +1,46 @@
+{
+  "components": {
+    "parameters": {
+      "SessionIdCookie": {
+        "name": "session_id",
+        "in": "cookie",
+        "description": "Session identifier",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "sess_01HF7G7QG9G6F7B9V7H2C9QZ9F"
+      },
+      "LocaleCookie": {
+        "name": "locale",
+        "in": "cookie",
+        "description": "User locale",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "en-US"
+      },
+      "FeatureFlagCookie": {
+        "name": "feature_flags",
+        "in": "cookie",
+        "description": "Comma-separated feature flags",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "beta_checkout,dark_mode"
+      },
+      "DeviceIdCookie": {
+        "name": "device_id",
+        "in": "cookie",
+        "description": "Device identifier",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "dev_4a8f0b2c1d"
+      }
+    }
+  }
+}

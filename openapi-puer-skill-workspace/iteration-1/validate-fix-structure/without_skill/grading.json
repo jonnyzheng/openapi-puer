@@ -1,0 +1,45 @@
+{
+  "variant": "without_skill",
+  "expectations": [
+    {
+      "text": "Validation report lists all 9 items",
+      "passed": true,
+      "evidence": "9/9 items mentioned in report"
+    },
+    {
+      "text": "Report identifies .openapi-puer as missing",
+      "passed": true,
+      "evidence": "Contains .openapi-puer reference and MISSING status"
+    },
+    {
+      "text": "Report confirms existing items as present",
+      "passed": true,
+      "evidence": "15 items marked as present/existing"
+    },
+    {
+      "text": "environments.json created with proper structure",
+      "passed": true,
+      "evidence": "Has environments array: True"
+    },
+    {
+      "text": "Staging environment with correct baseUrl",
+      "passed": true,
+      "evidence": "Found 1 staging env(s)"
+    },
+    {
+      "text": "Environment IDs follow env_<name> pattern",
+      "passed": false,
+      "evidence": "IDs: ['NO ID']"
+    },
+    {
+      "text": "Timestamps present in all environments",
+      "passed": false,
+      "evidence": "Has timestamps: False"
+    },
+    {
+      "text": "All JSON files valid",
+      "passed": true,
+      "evidence": "Parsed successfully"
+    }
+  ]
+}

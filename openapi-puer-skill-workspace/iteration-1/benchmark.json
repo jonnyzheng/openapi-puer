@@ -1,0 +1,54 @@
+{
+  "skill_name": "openapi-puer",
+  "iteration": 1,
+  "summary": {
+    "with_skill": {
+      "total_assertions": 32,
+      "passed": 32,
+      "pass_rate": 1.0
+    },
+    "without_skill": {
+      "total_assertions": 32,
+      "passed": 19,
+      "pass_rate": 0.59
+    },
+    "delta": {
+      "pass_rate_improvement": 0.41
+    }
+  },
+  "evals": [
+    {
+      "eval_name": "scaffold-petstore",
+      "with_skill": {"passed": 14, "total": 14, "pass_rate": 1.0},
+      "without_skill": {"passed": 5, "total": 14, "pass_rate": 0.36},
+      "key_differences": [
+        "Without skill: wrong OpenAPI version (3.0.0 vs 3.1.1), no paths files, empty schemas, missing cookie.json and header.json params, no README, no Default environment",
+        "With skill: complete structure, all conventions followed perfectly"
+      ]
+    },
+    {
+      "eval_name": "add-auth-endpoints",
+      "with_skill": {"passed": 10, "total": 10, "pass_rate": 1.0},
+      "without_skill": {"passed": 8, "total": 10, "pass_rate": 0.8},
+      "key_differences": [
+        "Without skill: missing 'servers' field in standalone OpenAPI doc, camelCase operationIds (loginUser) instead of kebab-case (auth-login)",
+        "With skill: all conventions including servers:[], kebab-case operationIds, correct $ref format"
+      ]
+    },
+    {
+      "eval_name": "validate-fix-structure",
+      "with_skill": {"passed": 8, "total": 8, "pass_rate": 1.0},
+      "without_skill": {"passed": 6, "total": 8, "pass_rate": 0.75},
+      "key_differences": [
+        "Without skill: environments.json missing env_<name> ID pattern, missing createdAt/updatedAt timestamps, missing Default environment",
+        "With skill: proper IDs (env_default, env_staging), timestamps, both Default and Staging environments"
+      ]
+    }
+  ],
+  "analyst_notes": [
+    "The skill shows strongest improvement on the scaffold task (36% → 100%), where the baseline missed most structural requirements",
+    "Convention adherence (operationId naming, standalone doc format, environment IDs) is consistently better with the skill",
+    "The baseline performed reasonably on auth endpoints (80%) since the prompt mentioned OpenAPI Puer conventions, but still missed server field and naming conventions",
+    "No assertions appear non-discriminating — all test areas show measurable differences between with/without skill"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "eval_id": 2,
+  "eval_name": "validate-fix-structure",
+  "prompt": "Check if my API folder at samples/ has a valid OpenAPI Puer structure. Fix anything that's missing and add a staging environment with base URL https://staging.example.com.",
+  "assertions": [
+    {
+      "id": "validation-report-exists",
+      "text": "A validation report file exists that lists the status of all 9 required items",
+      "type": "structural"
+    },
+    {
+      "id": "missing-items-identified",
+      "text": "The report correctly identifies .openapi-puer/ and .openapi-puer/environments.json as missing",
+      "type": "content"
+    },
+    {
+      "id": "existing-items-confirmed",
+      "text": "The report correctly confirms components/, components/parameters/, components/responses/, components/requestBodies/, components/schemas/, paths/, api.json as present",
+      "type": "content"
+    },
+    {
+      "id": "environments-created",
+      "text": ".openapi-puer/environments.json was created with proper structure",
+      "type": "structural"
+    },
+    {
+      "id": "staging-environment-added",
+      "text": "environments.json contains a staging environment with baseUrl 'https://staging.example.com'",
+      "type": "content"
+    },
+    {
+      "id": "env-id-format",
+      "text": "Environment IDs follow the env_<name> pattern",
+      "type": "convention"
+    },
+    {
+      "id": "timestamps-present",
+      "text": "Environment entries include createdAt and updatedAt timestamps in ISO 8601 format",
+      "type": "convention"
+    },
+    {
+      "id": "valid-json",
+      "text": "All created JSON files are valid parseable JSON",
+      "type": "structural"
+    }
+  ]
+}

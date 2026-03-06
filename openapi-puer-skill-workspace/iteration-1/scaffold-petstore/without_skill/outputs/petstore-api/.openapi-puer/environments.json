@@ -1,0 +1,10 @@
+{
+  "development": {
+    "baseUrl": "http://localhost:3000",
+    "variables": {}
+  },
+  "production": {
+    "baseUrl": "https://api.petstore.com",
+    "variables": {}
+  }
+}

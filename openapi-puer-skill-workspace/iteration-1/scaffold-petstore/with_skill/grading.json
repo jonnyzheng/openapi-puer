@@ -1,0 +1,75 @@
+{
+  "variant": "with_skill",
+  "expectations": [
+    {
+      "text": "All 9 required items exist",
+      "passed": true,
+      "evidence": "Present: 9/9. Missing: none"
+    },
+    {
+      "text": "api.json valid with 3.1.1, info, servers, paths",
+      "passed": true,
+      "evidence": "openapi=3.1.1, has info/servers/paths"
+    },
+    {
+      "text": "pets.json has 5 endpoints",
+      "passed": true,
+      "evidence": "Operations: ['GET /pets', 'POST /pets', 'GET /pets/{petId}', 'PUT /pets/{petId}', 'DELETE /pets/{petId}']"
+    },
+    {
+      "text": "categories.json has 2 endpoints",
+      "passed": true,
+      "evidence": "Operations: ['GET /categories', 'POST /categories']"
+    },
+    {
+      "text": "Pet schema exists",
+      "passed": true,
+      "evidence": "Schemas: ['Pet', 'CreatePetRequest']"
+    },
+    {
+      "text": "Category schema exists",
+      "passed": true,
+      "evidence": "Schemas: ['Category', 'CreateCategoryRequest']"
+    },
+    {
+      "text": "All 4 parameter files exist",
+      "passed": true,
+      "evidence": "Found: ['cookie.json', 'header.json', 'path.json', 'query.json']"
+    },
+    {
+      "text": "operationIds are kebab-case",
+      "passed": true,
+      "evidence": "IDs: ['list-categories', 'create-category', 'list-pets', 'create-pet', 'get-pet', 'update-pet', 'delete-pet']"
+    },
+    {
+      "text": "Schema names PascalCase",
+      "passed": true,
+      "evidence": "Names: ['Category', 'CreateCategoryRequest', 'Pet', 'CreatePetRequest']"
+    },
+    {
+      "text": "$ref format correct",
+      "passed": true,
+      "evidence": "All $refs use ../components/schemas/<file>.json#/components/schemas/<Name> format (verified via grep)"
+    },
+    {
+      "text": "Paths files are standalone OpenAPI docs",
+      "passed": true,
+      "evidence": "All have openapi+info+servers+paths: True"
+    },
+    {
+      "text": "environments.json with Default env",
+      "passed": true,
+      "evidence": "Envs: ['Default']"
+    },
+    {
+      "text": "README.md exists",
+      "passed": true,
+      "evidence": "Exists: True"
+    },
+    {
+      "text": "All JSON files valid",
+      "passed": true,
+      "evidence": "Valid: True"
+    }
+  ]
+}

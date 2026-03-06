@@ -307,8 +307,7 @@ export class ApiPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'src', 'webview'),
           vscode.Uri.joinPath(extensionUri, 'out', 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'resources'),
-          vscode.Uri.joinPath(extensionUri, 'node_modules', 'prismjs')
+          vscode.Uri.joinPath(extensionUri, 'resources')
         ]
       }
     );
@@ -338,8 +337,7 @@ export class ApiPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'src', 'webview'),
           vscode.Uri.joinPath(extensionUri, 'out', 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'resources'),
-          vscode.Uri.joinPath(extensionUri, 'node_modules', 'prismjs')
+          vscode.Uri.joinPath(extensionUri, 'resources')
         ]
       }
     );
@@ -758,42 +756,43 @@ export class ApiPanel {
 
   private getHtmlContent(): string {
     const webview = this.panel.webview;
+    const webviewAssetRoot = vscode.Uri.joinPath(this.extensionUri, 'out', 'webview');
 
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'styles.css')
+      vscode.Uri.joinPath(webviewAssetRoot, 'styles.css')
     );
     const tailwindUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'tailwind.css')
+      vscode.Uri.joinPath(webviewAssetRoot, 'tailwind.css')
     );
     const prismCssUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'themes', 'prism-tomorrow.css')
+      vscode.Uri.joinPath(webviewAssetRoot, 'prism', 'themes', 'prism-tomorrow.css')
     );
     const prismJsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'prism.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'prism', 'prism.js')
     );
     const prismJsonUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', 'prismjs', 'components', 'prism-json.min.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'prism', 'components', 'prism-json.min.js')
     );
     const utilsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'utils.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'utils.js')
     );
     const schemaTableUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'schemaTable.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'schemaTable.js')
     );
     const detailsTabUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'detailsTab.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'detailsTab.js')
     );
     const requestTabUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'requestTab.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'requestTab.js')
     );
     const componentsTabUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'componentsTab.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'componentsTab.js')
     );
     const serversTabUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'serversTab.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'serversTab.js')
     );
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'main.js')
+      vscode.Uri.joinPath(webviewAssetRoot, 'main.js')
     );
 
     const nonce = this.getNonce();

@@ -1,0 +1,48 @@
+{
+  "components": {
+    "parameters": {
+      "UserIdParam": {
+        "name": "userId",
+        "in": "path",
+        "description": "User identifier",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uuid"
+        },
+        "example": "1d9b6f7a-7f7e-4b6b-9d0f-6d5a6b0f4b2a"
+      },
+      "ProductIdParam": {
+        "name": "productId",
+        "in": "path",
+        "description": "Product identifier",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "example": "prod_12345"
+      },
+      "OrderIdParam": {
+        "name": "orderId",
+        "in": "path",
+        "description": "Order identifier",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "example": "ord_98765"
+      },
+      "VersionParam": {
+        "name": "version",
+        "in": "path",
+        "description": "Resource version",
+        "schema": {
+          "type": "string",
+          "minimum": 1
+        },
+        "example": 1,
+        "required": true
+      }
+    }
+  }
+}

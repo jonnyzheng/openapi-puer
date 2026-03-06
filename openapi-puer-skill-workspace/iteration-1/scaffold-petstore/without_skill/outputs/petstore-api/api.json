@@ -1,0 +1,29 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Pet Store API",
+    "version": "1.0.0",
+    "description": "A simple API for managing pets and pet categories in a pet store",
+    "contact": {
+      "name": "Pet Store Support",
+      "email": "support@petstore.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://api.petstore.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {},
+  "components": {
+    "schemas": {},
+    "parameters": {},
+    "requestBodies": {},
+    "responses": {}
+  }
+}

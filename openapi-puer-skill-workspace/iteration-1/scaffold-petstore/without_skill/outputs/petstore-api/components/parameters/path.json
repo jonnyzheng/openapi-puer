@@ -1,0 +1,22 @@
+{
+  "petId": {
+    "name": "petId",
+    "in": "path",
+    "description": "The ID of the pet",
+    "required": true,
+    "schema": {
+      "type": "integer",
+      "format": "int64"
+    }
+  },
+  "categoryId": {
+    "name": "categoryId",
+    "in": "path",
+    "description": "The ID of the category",
+    "required": true,
+    "schema": {
+      "type": "integer",
+      "format": "int64"
+    }
+  }
+}

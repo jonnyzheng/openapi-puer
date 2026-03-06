@@ -1,0 +1,142 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "pets",
+    "version": "1.0.0",
+    "description": ""
+  },
+  "servers": [],
+  "paths": {
+    "/pets": {
+      "get": {
+        "summary": "List pets",
+        "operationId": "list-pets",
+        "tags": ["Pets"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "../components/schemas/pet.json#/components/schemas/Pet"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create pet",
+        "operationId": "create-pet",
+        "tags": ["Pets"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "../components/schemas/pet.json#/components/schemas/CreatePetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pet created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "../components/schemas/pet.json#/components/schemas/Pet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pets/{petId}": {
+      "get": {
+        "summary": "Get pet by ID",
+        "operationId": "get-pet",
+        "tags": ["Pets"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pet details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "../components/schemas/pet.json#/components/schemas/Pet"
+                }
+              }
+            }
+          },
+          "404": { "description": "Pet not found" }
+        }
+      },
+      "put": {
+        "summary": "Update pet",
+        "operationId": "update-pet",
+        "tags": ["Pets"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "../components/schemas/pet.json#/components/schemas/CreatePetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pet updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "../components/schemas/pet.json#/components/schemas/Pet"
+                }
+              }
+            }
+          },
+          "404": { "description": "Pet not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete pet",
+        "operationId": "delete-pet",
+        "tags": ["Pets"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Pet deleted" },
+          "404": { "description": "Pet not found" }
+        }
+      }
+    }
+  }
+}

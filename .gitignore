@@ -9,3 +9,4 @@ node_modules
 .sisyphus
 debug-sample/
 openspec/
+.agents
