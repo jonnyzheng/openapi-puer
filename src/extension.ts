@@ -15,7 +15,7 @@ let configService: ConfigService;
 let httpService: HttpService;
 let environmentService: EnvironmentService;
 let treeProvider: ApiTreeProvider;
-let statusBarItem: vscode.StatusBarItem;
+
 let apiFiles: ApiFile[] = [];
 let panelHandlersRegistered = false;
 
@@ -45,11 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
     dragAndDropController: dragAndDropController
   });
 
-  // Create status bar item for active environment
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.command = 'openapi-puer.selectEnvironment';
-  updateStatusBar();
-  statusBarItem.show();
+
 
   // Register commands
   const refreshCommand = vscode.commands.registerCommand('openapi-puer.refresh', async () => {
@@ -72,7 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (name) {
       await environmentService.createEnvironment(name);
-      updateStatusBar();
+
       vscode.window.showInformationMessage(`Environment "${name}" created`);
     }
   });
@@ -100,7 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
           await environmentService.setActiveEnvironment(env.id);
         }
       }
-      updateStatusBar();
+
       updatePanelEnvironments();
     }
   });
@@ -149,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
           });
           if (newName && newName !== env.name) {
             await environmentService.updateEnvironment(env.id, { name: newName });
-            updateStatusBar();
+
             vscode.window.showInformationMessage(`Environment renamed to "${newName}"`);
           }
         } else if (action?.label === 'Delete') {
@@ -160,7 +156,7 @@ export function activate(context: vscode.ExtensionContext) {
           );
           if (confirm === 'Delete') {
             await environmentService.deleteEnvironment(env.id);
-            updateStatusBar();
+
             vscode.window.showInformationMessage(`Environment "${env.name}" deleted`);
           }
         }
@@ -255,6 +251,46 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showErrorMessage(`Failed to scaffold folder: ${message}`);
         }
       }
+    }
+  });
+
+  const setupDocsStructureCommand = vscode.commands.registerCommand('openapi-puer.setupDocsStructure', async () => {
+    const apiDirectory = configService.getApiDirectory();
+    if (!apiDirectory) {
+      vscode.window.showErrorMessage('Please set an API folder first');
+      return;
+    }
+
+    if (!configService.validateAndNotify(apiDirectory)) {
+      return;
+    }
+
+    const validation = configService.validateFolderStructure(apiDirectory);
+    if (validation.valid) {
+      vscode.window.showInformationMessage('API folder structure is already complete.');
+      return;
+    }
+
+    const choice = await vscode.window.showInformationMessage(
+      'Your API folder is missing required OpenAPI Puer files. Create them now?',
+      { modal: true },
+      'Create'
+    );
+
+    if (choice !== 'Create') {
+      return;
+    }
+
+    try {
+      await configService.scaffoldFolderStructure(apiDirectory);
+      environmentService.setApiDirectory(apiDirectory);
+      configService.setupFileWatcher(apiDirectory);
+      openApiService.clearCache();
+      await refreshApiFiles();
+      vscode.window.showInformationMessage(`API docs structure set up in: ${apiDirectory}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to scaffold folder: ${message}`);
     }
   });
 
@@ -581,7 +617,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle environment changes
   environmentService.onEnvironmentsChange(() => {
-    updateStatusBar();
     updatePanelEnvironments();
   });
 
@@ -592,7 +627,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register disposables
   context.subscriptions.push(
     treeView,
-    statusBarItem,
+    treeView,
     refreshCommand,
     openEndpointCommand,
     toggleGroupByTagsCommand,
@@ -601,6 +636,7 @@ export function activate(context: vscode.ExtensionContext) {
     editEnvironmentCommand,
     setApiFolderCommand,
     setupApiFolderCommand,
+    setupDocsStructureCommand,
     addFolderCommand,
     addFileCommand,
     deleteItemCommand,
@@ -623,8 +659,22 @@ export function activate(context: vscode.ExtensionContext) {
 async function refreshApiFiles(): Promise<void> {
   const apiDirectory = configService.getApiDirectory();
   const isConfigured = configService.isApiDirectoryConfigured();
+  let isDirectoryValid = false;
+  let needsSetup = false;
+
+  if (apiDirectory) {
+    const validation = configService.validateDirectory(apiDirectory);
+    isDirectoryValid = validation.valid;
+    if (isConfigured && isDirectoryValid) {
+      needsSetup = !configService.validateFolderStructure(apiDirectory).valid;
+    }
+  }
+
+  await vscode.commands.executeCommand('setContext', 'openapiPuer.apiFolderConfigured', isConfigured);
+  await vscode.commands.executeCommand('setContext', 'openapiPuer.apiFolderNeedsSetup', needsSetup);
 
   treeProvider.setApiFolderConfigured(isConfigured);
+  treeProvider.setApiFolderNeedsSetup(needsSetup);
   treeProvider.setApiDirectory(apiDirectory);
 
   if (!apiDirectory) {
@@ -632,7 +682,12 @@ async function refreshApiFiles(): Promise<void> {
     return;
   }
 
-  if (!configService.validateDirectory(apiDirectory).valid) {
+  if (!isDirectoryValid) {
+    treeProvider.setApiFiles([]);
+    return;
+  }
+
+  if (needsSetup) {
     treeProvider.setApiFiles([]);
     return;
   }
@@ -1121,16 +1176,7 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
 
 }
 
-function updateStatusBar(): void {
-  const activeEnv = environmentService.getActiveEnvironment();
-  if (activeEnv) {
-    statusBarItem.text = `$(globe) ${activeEnv.name}`;
-    statusBarItem.tooltip = `Active environment: ${activeEnv.name}\nClick to change`;
-  } else {
-    statusBarItem.text = '$(globe) No Environment';
-    statusBarItem.tooltip = 'Click to select an environment';
-  }
-}
+
 
 function updatePanelEnvironments(): void {
   if (ApiPanel.currentPanel) {

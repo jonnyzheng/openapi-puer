@@ -38,6 +38,7 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
   private apiFiles: ApiFile[] = [];
   private groupByTags = false;
   private apiFolderConfigured = false;
+  private apiFolderNeedsSetup = false;
   private apiDirectory = '';
   private folderTree: FolderNode | null = null;
 
@@ -55,6 +56,11 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
   setApiFolderConfigured(configured: boolean): void {
     this.apiFolderConfigured = configured;
+    this.refresh();
+  }
+
+  setApiFolderNeedsSetup(needsSetup: boolean): void {
+    this.apiFolderNeedsSetup = needsSetup;
     this.refresh();
   }
 
@@ -172,9 +178,12 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
   }
 
   private getRootItems(): ApiTreeItem[] {
-    // Show onboarding UI when no API folder is configured
     if (!this.apiFolderConfigured) {
-      return this.getOnboardingItems();
+      return [];
+    }
+
+    if (this.apiFolderNeedsSetup) {
+      return [];
     }
 
     if (!this.folderTree) {
@@ -183,37 +192,6 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
     // Return children of root folder directly
     return this.getFolderChildren(this.folderTree);
-  }
-
-  private getOnboardingItems(): ApiTreeItem[] {
-    const items: ApiTreeItem[] = [];
-
-    // Welcome message
-    const welcomeItem = new ApiTreeItem(
-      'Welcome to OpenAPI Puer',
-      vscode.TreeItemCollapsibleState.None,
-      'folder'
-    );
-    welcomeItem.description = 'Get started by selecting your API folder';
-    welcomeItem.iconPath = new vscode.ThemeIcon('info');
-    welcomeItem.contextValue = 'onboarding-welcome';
-    items.push(welcomeItem);
-
-    // Setup button
-    const setupItem = new ApiTreeItem(
-      'Select API Folder',
-      vscode.TreeItemCollapsibleState.None,
-      'folder'
-    );
-    setupItem.iconPath = new vscode.ThemeIcon('folder-opened');
-    setupItem.contextValue = 'onboarding-setup';
-    setupItem.command = {
-      command: 'openapi-puer.setupApiFolder',
-      title: 'Select API Folder'
-    };
-    items.push(setupItem);
-
-    return items;
   }
 
   private getFolderChildren(folderNode: FolderNode): ApiTreeItem[] {
@@ -317,7 +295,9 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
 
     for (const endpoint of apiFile.endpoints) {
       if (endpoint.tags && endpoint.tags.length > 0) {
-        endpoint.tags.forEach((tag) => tags.add(tag));
+        endpoint.tags.forEach((tag) => {
+          tags.add(tag);
+        });
       } else {
         hasUntagged = true;
       }

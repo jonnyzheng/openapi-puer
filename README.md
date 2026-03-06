@@ -15,12 +15,13 @@ OpenAPI Puer is a Postman-style API development and testing tool for VS Code. It
 
 1. Install the extension in VS Code
 2. Open a workspace
-3. The OpenAPI Puer sidebar shows a welcome screen with a **Select API Folder** button
+3. The OpenAPI Puer sidebar shows a welcome screen with a **Set API Folder** button
 4. Click it to choose a folder for your API documentation
 5. If the folder is empty or missing the expected structure, the extension offers to scaffold it automatically
 6. Once configured, expand the API Explorer and click an endpoint to open the request panel
 
-You can also run **OpenAPI Puer: Setup API Folder** from the command palette at any time.
+You can also run **OpenAPI Puer: Select API Folder** from the command palette at any time.
+If the configured folder is empty or missing required files, run **OpenAPI Puer: Setup Docs Structure**.
 
 ## OpenAPI Files
 
@@ -30,10 +31,13 @@ You can also run **OpenAPI Puer: Setup API Folder** from the command palette at 
 
 ## First-Time Setup
 
-When no API folder is configured, the sidebar displays an onboarding view:
+When no API folder is configured, the sidebar displays welcome content:
 
-- **Welcome to OpenAPI Puer** message with a description
-- **Select API Folder** button that opens a folder picker
+- **Set API Folder** button that opens a folder picker
+
+When an API folder is configured but empty or missing required structure, the sidebar displays:
+
+- **Setup Docs Structure** button to scaffold required folders and files
 
 After selecting a folder, the extension validates its structure. If the folder lacks the expected layout (`.openapi-puer/`, `components/`, `paths/`, `api.json`), you are prompted to scaffold it. Scaffolding creates all required directories, default configuration files, and a README.md — without overwriting any existing files.
 
@@ -43,7 +47,7 @@ Set the API directory in VS Code settings:
 
 - openapi-puer.apiDirectory: Path to the folder containing OpenAPI JSON files
 
-You can also set it from the API Explorer title bar using Set API Folder, or use the **Setup API Folder** command for the full onboarding flow with automatic scaffolding.
+You can also set it from the API Explorer title bar using **Select API Folder**. This uses the same onboarding flow with automatic scaffolding.
 
 ## Working With APIs
 

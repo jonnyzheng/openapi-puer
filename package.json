@@ -25,7 +25,8 @@
     "onCustomEditor:openapi-puer.environmentsEditor",
     "onView:openapi-puer.apiExplorer",
     "onCommand:openapi-puer.setApiFolder",
-    "onCommand:openapi-puer.setupApiFolder"
+    "onCommand:openapi-puer.setupApiFolder",
+    "onCommand:openapi-puer.setupDocsStructure"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -157,9 +158,15 @@
       },
       {
         "command": "openapi-puer.setupApiFolder",
-        "title": "Setup API Folder",
+        "title": "Select API Folder",
         "category": "OpenAPI Puer",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "openapi-puer.setupDocsStructure",
+        "title": "Setup Docs Structure",
+        "category": "OpenAPI Puer",
+        "icon": "$(tools)"
       }
     ],
     "menus": {
@@ -185,7 +192,7 @@
           "group": "navigation@4"
         },
         {
-          "command": "openapi-puer.setApiFolder",
+          "command": "openapi-puer.setupApiFolder",
           "when": "view == openapi-puer.apiExplorer",
           "group": "navigation@5"
         }
@@ -291,7 +298,13 @@
     "viewsWelcome": [
       {
         "view": "openapi-puer.apiExplorer",
-        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started."
+        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started.",
+        "when": "!openapiPuer.apiFolderConfigured"
+      },
+      {
+        "view": "openapi-puer.apiExplorer",
+        "contents": "API folder is empty or missing required structure.\n[Setup Docs Structure](command:openapi-puer.setupDocsStructure)\nCreate required OpenAPI Puer folders and files in the configured API folder.",
+        "when": "openapiPuer.apiFolderConfigured && openapiPuer.apiFolderNeedsSetup"
       }
     ]
   },
