@@ -182,6 +182,72 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "openapi-puer.refresh",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.openEndpoint",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.toggleGroupByTags",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.createEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.selectEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.editEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addFolder",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addFile",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addEndpoint",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addModel",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addServer",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.setupDocsStructure",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "openapi-puer.addFolder",
