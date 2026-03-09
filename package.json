@@ -30,7 +30,6 @@
   "activationEvents": [
     "onCustomEditor:openapi-puer.environmentsEditor",
     "onView:openapi-puer.apiExplorer",
-    "onCommand:openapi-puer.setApiFolder",
     "onCommand:openapi-puer.setupApiFolder",
     "onCommand:openapi-puer.setupDocsStructure"
   ],
@@ -107,12 +106,6 @@
         "command": "openapi-puer.editEnvironment",
         "title": "Edit Environment",
         "category": "OpenAPI Puer"
-      },
-      {
-        "command": "openapi-puer.setApiFolder",
-        "title": "Set API Folder",
-        "category": "OpenAPI Puer",
-        "icon": "$(folder-opened)"
       },
       {
         "command": "openapi-puer.addFolder",
@@ -347,7 +340,7 @@
     "viewsWelcome": [
       {
         "view": "openapi-puer.apiExplorer",
-        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setApiFolder)\nSelect a folder containing your OpenAPI specification files to get started.",
+        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setupApiFolder)\nSelect a folder containing your OpenAPI specification files to get started.",
         "when": "!openapiPuer.apiFolderConfigured"
       },
       {

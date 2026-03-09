@@ -168,36 +168,6 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const setApiFolderCommand = vscode.commands.registerCommand('openapi-puer.setApiFolder', async () => {
-    const workspaceRoot = configService.getWorkspaceRoot();
-    const defaultUri = workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined;
-
-    const folderUri = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
-      openLabel: 'Select API Folder',
-      defaultUri,
-      title: 'Select folder containing OpenAPI specification files'
-    });
-
-    if (folderUri && folderUri.length > 0) {
-      const selectedPath = folderUri[0].fsPath;
-
-      if (!configService.validateAndNotify(selectedPath)) {
-        return;
-      }
-
-      await configService.setApiDirectory(selectedPath);
-      environmentService.setApiDirectory(selectedPath);
-      configService.setupFileWatcher(selectedPath);
-      openApiService.clearCache();
-      await refreshApiFiles();
-
-      vscode.window.showInformationMessage(`API folder set to: ${selectedPath}`);
-    }
-  });
-
   const setupApiFolderCommand = vscode.commands.registerCommand('openapi-puer.setupApiFolder', async () => {
     const workspaceRoot = configService.getWorkspaceRoot();
     const defaultUri = workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined;
@@ -735,7 +705,6 @@ export function activate(context: vscode.ExtensionContext) {
     createEnvironmentCommand,
     selectEnvironmentCommand,
     editEnvironmentCommand,
-    setApiFolderCommand,
     setupApiFolderCommand,
     setupDocsStructureCommand,
     addFolderCommand,
