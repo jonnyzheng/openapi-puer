@@ -1,0 +1,46 @@
+{
+  "components": {
+    "parameters": {
+      "AuthorizationHeader": {
+        "name": "Authorization",
+        "in": "header",
+        "description": "Bearer token",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+      },
+      "RequestIdHeader": {
+        "name": "X-Request-Id",
+        "in": "header",
+        "description": "Request identifier for tracing",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "req_01HF7G7QG9G6F7B9V7H2C9QZ9F"
+      },
+      "IdempotencyKeyHeader": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "description": "Idempotency key for safely retrying requests",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "idem_8b1f5f2a9d4c4b0f9f8e"
+      },
+      "AcceptLanguageHeader": {
+        "name": "Accept-Language",
+        "in": "header",
+        "description": "Preferred response language",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "example": "en-US"
+      }
+    }
+  }
+}

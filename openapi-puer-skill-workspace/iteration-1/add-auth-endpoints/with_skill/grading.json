@@ -1,0 +1,55 @@
+{
+  "variant": "with_skill",
+  "expectations": [
+    {
+      "text": "paths/auth.json exists as standalone OpenAPI doc",
+      "passed": true,
+      "evidence": "Has fields: openapi=True, info=True, servers=True, paths=True"
+    },
+    {
+      "text": "POST /auth/login with email+password",
+      "passed": true,
+      "evidence": "Login request schema has email+password: True"
+    },
+    {
+      "text": "POST /auth/register with username+email+password",
+      "passed": true,
+      "evidence": "Register request schema has username+email+password: True"
+    },
+    {
+      "text": "POST /auth/logout exists",
+      "passed": true,
+      "evidence": "Endpoint exists=True"
+    },
+    {
+      "text": "auth schemas file with components.schemas",
+      "passed": true,
+      "evidence": "Schema names: ['LoginRequest', 'LoginResponse', 'RegisterRequest', 'RegisterResponse']"
+    },
+    {
+      "text": "openapi version matches 3.1.1",
+      "passed": true,
+      "evidence": "Version: 3.1.1"
+    },
+    {
+      "text": "operationIds are kebab-case",
+      "passed": true,
+      "evidence": "operationIds: ['auth-login', 'auth-register', 'auth-logout']"
+    },
+    {
+      "text": "$ref uses correct format",
+      "passed": true,
+      "evidence": "Refs: ['../components/schemas/auth.json#/components/schemas/LoginRequest', '../components/schemas/auth.json#/components/schemas/LoginResponse', '../components/schemas/auth.json#/components/schemas/RegisterRequest', '../components/schemas/auth.json#/components/schemas/RegisterResponse']"
+    },
+    {
+      "text": "Schema names PascalCase",
+      "passed": true,
+      "evidence": "Names: ['LoginRequest', 'LoginResponse', 'RegisterRequest', 'RegisterResponse']"
+    },
+    {
+      "text": "All JSON files valid",
+      "passed": true,
+      "evidence": "Both files parsed successfully"
+    }
+  ]
+}

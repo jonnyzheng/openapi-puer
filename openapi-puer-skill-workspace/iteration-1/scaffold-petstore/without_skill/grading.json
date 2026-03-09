@@ -1,0 +1,75 @@
+{
+  "variant": "without_skill",
+  "expectations": [
+    {
+      "text": "All 9 required items exist",
+      "passed": true,
+      "evidence": "Present: 9/9. Missing: none"
+    },
+    {
+      "text": "api.json valid with 3.1.1, info, servers, paths",
+      "passed": false,
+      "evidence": "openapi=3.0.0, has info/servers/paths"
+    },
+    {
+      "text": "pets.json has 5 endpoints",
+      "passed": false,
+      "evidence": "File not found"
+    },
+    {
+      "text": "categories.json has 2 endpoints",
+      "passed": false,
+      "evidence": "File not found"
+    },
+    {
+      "text": "Pet schema exists",
+      "passed": false,
+      "evidence": "Schemas: []"
+    },
+    {
+      "text": "Category schema exists",
+      "passed": false,
+      "evidence": "Schemas: []"
+    },
+    {
+      "text": "All 4 parameter files exist",
+      "passed": false,
+      "evidence": "Found: ['path.json', 'query.json']"
+    },
+    {
+      "text": "operationIds are kebab-case",
+      "passed": true,
+      "evidence": "IDs: []"
+    },
+    {
+      "text": "Schema names PascalCase",
+      "passed": false,
+      "evidence": "Names: []"
+    },
+    {
+      "text": "$ref format correct",
+      "passed": true,
+      "evidence": "Refs: []..."
+    },
+    {
+      "text": "Paths files are standalone OpenAPI docs",
+      "passed": true,
+      "evidence": "All have openapi+info+servers+paths: True"
+    },
+    {
+      "text": "environments.json with Default env",
+      "passed": false,
+      "evidence": "Envs: []"
+    },
+    {
+      "text": "README.md exists",
+      "passed": false,
+      "evidence": "Exists: False"
+    },
+    {
+      "text": "All JSON files valid",
+      "passed": true,
+      "evidence": "Valid: True"
+    }
+  ]
+}

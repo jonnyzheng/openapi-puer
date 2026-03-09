@@ -1,0 +1,61 @@
+{
+  "skill_name": "openapi-puer",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I'm building a pet store API. Set up the OpenAPI Puer folder structure in a new folder called 'petstore-api' and generate endpoints for managing pets (list, create, get by ID, update, delete) and pet categories (list, create). Include schemas for Pet and Category models.",
+      "expected_output": "Full OpenAPI Puer folder structure with api.json, paths/pets.json, paths/categories.json, components/schemas/pet.json, components/schemas/category.json, all parameter files, environments.json, and README.md",
+      "files": [],
+      "assertions": [
+        {"id": "folder-structure-complete", "text": "All 9 required OpenAPI Puer items exist"},
+        {"id": "api-json-valid", "text": "api.json is valid JSON with openapi 3.1.1, info, servers, paths"},
+        {"id": "pets-endpoints-exist", "text": "paths/pets.json has 5 CRUD endpoints"},
+        {"id": "categories-endpoints-exist", "text": "paths/categories.json has 2 endpoints"},
+        {"id": "pet-schema-exists", "text": "components/schemas/pet.json has Pet schema under components.schemas"},
+        {"id": "category-schema-exists", "text": "components/schemas/category.json has Category schema"},
+        {"id": "parameter-files-exist", "text": "All 4 parameter files in components/parameters/"},
+        {"id": "operation-ids-kebab-case", "text": "All operationIds use kebab-case"},
+        {"id": "schema-names-pascal-case", "text": "All schema names are PascalCase"},
+        {"id": "refs-correct-format", "text": "$ref values use ../components/schemas/<file>#/components/schemas/<Name>"},
+        {"id": "paths-files-standalone", "text": "Each paths file is a standalone OpenAPI doc with openapi+info+servers+paths"},
+        {"id": "environments-json-valid", "text": "environments.json has Default environment with id, name, baseUrl, timestamps"},
+        {"id": "readme-exists", "text": "README.md exists"},
+        {"id": "valid-json", "text": "All JSON files are valid parseable JSON"}
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "In my existing API project at debug-sample/, add a new endpoint file for user authentication. I need POST /auth/login (email + password, returns token), POST /auth/register (username, email, password), and POST /auth/logout. Also create the auth-related schemas.",
+      "expected_output": "New file paths/auth.json with 3 POST endpoints, new file components/schemas/auth.json with LoginRequest, RegisterRequest schemas",
+      "files": [],
+      "assertions": [
+        {"id": "auth-paths-file-exists", "text": "paths/auth.json exists as standalone OpenAPI doc"},
+        {"id": "login-endpoint", "text": "POST /auth/login with email+password in schema"},
+        {"id": "register-endpoint", "text": "POST /auth/register with username+email+password in schema"},
+        {"id": "logout-endpoint", "text": "POST /auth/logout exists"},
+        {"id": "auth-schemas-file-exists", "text": "components/schemas/auth.json has schemas under components.schemas"},
+        {"id": "openapi-version-matches", "text": "openapi version matches existing project (3.1.1)"},
+        {"id": "operation-ids-kebab-case", "text": "operationIds are kebab-case"},
+        {"id": "refs-correct-format", "text": "$ref values reference ../components/schemas/auth.json#/components/schemas/<Name>"},
+        {"id": "schema-names-pascal-case", "text": "Schema names are PascalCase"},
+        {"id": "valid-json", "text": "All JSON files are valid"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Check if my API folder at samples/ has a valid OpenAPI Puer structure. Fix anything that's missing and add a staging environment with base URL https://staging.example.com.",
+      "expected_output": "Validation report listing all 9 items, environments.json with Default + Staging environments",
+      "files": [],
+      "assertions": [
+        {"id": "validation-report-exists", "text": "Validation report lists all 9 required items"},
+        {"id": "missing-items-identified", "text": "Report identifies .openapi-puer/ as missing"},
+        {"id": "existing-items-confirmed", "text": "Report confirms 7 existing items as present"},
+        {"id": "environments-created", "text": "environments.json created with proper structure"},
+        {"id": "staging-environment-added", "text": "Staging environment with baseUrl https://staging.example.com"},
+        {"id": "env-id-format", "text": "Environment IDs follow env_<name> pattern"},
+        {"id": "timestamps-present", "text": "createdAt and updatedAt timestamps in ISO 8601"},
+        {"id": "valid-json", "text": "All JSON files are valid"}
+      ]
+    }
+  ]
+}

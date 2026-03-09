@@ -1,0 +1,456 @@
+{
+  "name": "openapi-puer",
+  "displayName": "OpenAPI Puer",
+  "description": "A GUI-style API VSCode extension for OpenAPI. Browse, test, and debug OpenAPI endpoints directly in your editor.",
+  "icon": "resources/icon.png",
+  "version": "0.1.0",
+  "publisher": "openapi-puer",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonnyzheng/openapi-puer"
+  },
+  "engines": {
+    "vscode": "^1.108.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "api",
+    "openapi",
+    "swagger",
+    "rest",
+    "http",
+    "postman",
+    "api-testing",
+    "api-client"
+  ],
+  "activationEvents": [
+    "onCustomEditor:openapi-puer.environmentsEditor",
+    "onView:openapi-puer.apiExplorer",
+    "onCommand:openapi-puer.setupApiFolder",
+    "onCommand:openapi-puer.setupDocsStructure"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "openapi-puer.environmentsEditor",
+        "displayName": "OpenAPI Puer Environment Editor",
+        "selector": [
+          {
+            "filenamePattern": "**/.openapi-puer/environments.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "configuration": {
+      "title": "OpenAPI Puer",
+      "properties": {
+        "openapi-puer.apiDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the directory containing OpenAPI specification files. If empty, defaults to workspace root."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "openapi-puer",
+          "title": "OpenAPI Puer",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "openapi-puer": [
+        {
+          "id": "openapi-puer.apiExplorer",
+          "name": "API Explorer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "openapi-puer.refresh",
+        "title": "Refresh",
+        "category": "OpenAPI Puer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "openapi-puer.openEndpoint",
+        "title": "Open Endpoint",
+        "category": "OpenAPI Puer"
+      },
+      {
+        "command": "openapi-puer.toggleGroupByTags",
+        "title": "Toggle Group by Tags",
+        "category": "OpenAPI Puer",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "openapi-puer.createEnvironment",
+        "title": "Create Environment",
+        "category": "OpenAPI Puer"
+      },
+      {
+        "command": "openapi-puer.selectEnvironment",
+        "title": "Select Environment",
+        "category": "OpenAPI Puer"
+      },
+      {
+        "command": "openapi-puer.editEnvironment",
+        "title": "Edit Environment",
+        "category": "OpenAPI Puer"
+      },
+      {
+        "command": "openapi-puer.addFolder",
+        "title": "Add Folder",
+        "category": "OpenAPI Puer",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "openapi-puer.addFile",
+        "title": "Add File",
+        "category": "OpenAPI Puer",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "openapi-puer.renameItem",
+        "title": "Rename",
+        "category": "OpenAPI Puer",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "openapi-puer.deleteItem",
+        "title": "Delete",
+        "category": "OpenAPI Puer",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "openapi-puer.viewSourceCode",
+        "title": "View Source Code",
+        "category": "OpenAPI Puer",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "openapi-puer.addEndpoint",
+        "title": "Add Endpoint",
+        "category": "OpenAPI Puer",
+        "icon": "$(add)"
+      },
+      {
+        "command": "openapi-puer.addModel",
+        "title": "Add Schema",
+        "category": "OpenAPI Puer",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "openapi-puer.addServer",
+        "title": "Add Server",
+        "category": "OpenAPI Puer",
+        "icon": "$(server)"
+      },
+      {
+        "command": "openapi-puer.openInNewTab",
+        "title": "Open in New Tab",
+        "category": "OpenAPI Puer",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "openapi-puer.setupApiFolder",
+        "title": "Select API Folder",
+        "category": "OpenAPI Puer",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "openapi-puer.setupDocsStructure",
+        "title": "Setup Docs Structure",
+        "category": "OpenAPI Puer",
+        "icon": "$(tools)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "openapi-puer.renameItem",
+        "key": "f2",
+        "when": "listFocus && view == openapi-puer.apiExplorer && !inputFocus && (viewItem == folder || viewItem == file || viewItem == file-api || viewItem == file-schema || viewItem == file-parameter || viewItem == file-error)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "openapi-puer.refresh",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.openEndpoint",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.toggleGroupByTags",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.createEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.selectEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.editEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addFolder",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addFile",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addEndpoint",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addModel",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.addServer",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "false"
+        },
+        {
+          "command": "openapi-puer.setupDocsStructure",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "openapi-puer.addFolder",
+          "when": "view == openapi-puer.apiExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "openapi-puer.addFile",
+          "when": "view == openapi-puer.apiExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "openapi-puer.refresh",
+          "when": "view == openapi-puer.apiExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "openapi-puer.toggleGroupByTags",
+          "when": "view == openapi-puer.apiExplorer",
+          "group": "navigation@4"
+        },
+        {
+          "command": "openapi-puer.setupApiFolder",
+          "when": "view == openapi-puer.apiExplorer",
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "openapi-puer.addFolder",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
+          "group": "1_add@1"
+        },
+        {
+          "command": "openapi-puer.addFile",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
+          "group": "1_add@2"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
+          "group": "1_add@3"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == folder",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.addEndpoint",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-error",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.addModel",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == endpoint",
+          "group": "0_open@1"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-api",
+          "group": "0_open@1"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-schema",
+          "group": "0_open@1"
+        },
+        {
+          "command": "openapi-puer.viewSourceCode",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "openapi-puer.renameItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "openapi-puer.deleteItem",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "2_delete"
+        },
+        {
+          "command": "openapi-puer.openInNewTab",
+          "when": "view == openapi-puer.apiExplorer && viewItem == file-parameter",
+          "group": "0_open@1"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "openapi-puer.apiExplorer",
+        "contents": "No API folder configured.\n[Set API Folder](command:openapi-puer.setupApiFolder)\nSelect a folder containing your OpenAPI specification files to get started.",
+        "when": "!openapiPuer.apiFolderConfigured"
+      },
+      {
+        "view": "openapi-puer.apiExplorer",
+        "contents": "API folder is empty or missing required structure.\n[Setup Docs Structure](command:openapi-puer.setupDocsStructure)\nCreate required OpenAPI Puer folders and files in the configured API folder.",
+        "when": "openapiPuer.apiFolderConfigured && openapiPuer.apiFolderNeedsSetup"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run build",
+    "compile": "tsc -p ./ && pnpm run copy:webview",
+    "copy:webview": "node ./copyWebviewAssets.mjs",
+    "bundle:extension": "esbuild ./src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=./out/extension.js --sourcemap",
+    "build:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --minify",
+    "watch:css": "tailwindcss -i ./src/webview/tailwind.css -o ./src/webview/styles.css --watch",
+    "build": "pnpm run build:css && pnpm run compile && pnpm run bundle:extension",
+    "watch": "pnpm run watch:css & tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test",
+    "package:vsix": "pnpm dlx @vscode/vsce package --no-dependencies"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^10.1.1",
+    "@vscode/webview-ui-toolkit": "^1.4.0",
+    "axios": "^1.13.5",
+    "prismjs": "^1.30.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.18",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "~20.19.31",
+    "@types/vscode": "^1.108.1",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.5.2",
+    "autoprefixer": "^10.4.24",
+    "esbuild": "^0.25.10",
+    "eslint": "^8.57.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3"
+  }
+}

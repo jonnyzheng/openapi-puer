@@ -1,0 +1,61 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "categories",
+    "version": "1.0.0",
+    "description": ""
+  },
+  "servers": [],
+  "paths": {
+    "/categories": {
+      "get": {
+        "summary": "List categories",
+        "operationId": "list-categories",
+        "tags": ["Categories"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "../components/schemas/category.json#/components/schemas/Category"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create category",
+        "operationId": "create-category",
+        "tags": ["Categories"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "../components/schemas/category.json#/components/schemas/CreateCategoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "../components/schemas/category.json#/components/schemas/Category"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

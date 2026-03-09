@@ -1,0 +1,12 @@
+out
+.DS_Store
+node_modules
+.vscode-test/
+*.vsix
+.claude
+.opencode
+.trae
+.sisyphus
+debug-sample/
+openspec/
+.agents

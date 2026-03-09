@@ -1,0 +1,77 @@
+{
+  "eval_id": 0,
+  "eval_name": "scaffold-petstore",
+  "prompt": "I'm building a pet store API. Set up the OpenAPI Puer folder structure in a new folder called 'petstore-api' and generate endpoints for managing pets (list, create, get by ID, update, delete) and pet categories (list, create). Include schemas for Pet and Category models.",
+  "assertions": [
+    {
+      "id": "folder-structure-complete",
+      "text": "All 9 required OpenAPI Puer items exist: .openapi-puer/, .openapi-puer/environments.json, components/, components/parameters/, components/responses/, components/requestBodies/, components/schemas/, paths/, api.json",
+      "type": "structural"
+    },
+    {
+      "id": "api-json-valid",
+      "text": "api.json is valid JSON with openapi version 3.1.1, has info.title, info.version, servers array, paths object",
+      "type": "content"
+    },
+    {
+      "id": "pets-endpoints-exist",
+      "text": "paths/pets.json exists with 5 operations: GET /pets, POST /pets, GET /pets/{petId}, PUT /pets/{petId}, DELETE /pets/{petId}",
+      "type": "content"
+    },
+    {
+      "id": "categories-endpoints-exist",
+      "text": "paths/categories.json exists with 2 operations: GET /categories, POST /categories",
+      "type": "content"
+    },
+    {
+      "id": "pet-schema-exists",
+      "text": "components/schemas/pet.json exists with a Pet schema under components.schemas",
+      "type": "content"
+    },
+    {
+      "id": "category-schema-exists",
+      "text": "components/schemas/category.json exists with a Category schema under components.schemas",
+      "type": "content"
+    },
+    {
+      "id": "parameter-files-exist",
+      "text": "All 4 parameter files exist in components/parameters/: cookie.json, header.json, path.json, query.json",
+      "type": "structural"
+    },
+    {
+      "id": "operation-ids-kebab-case",
+      "text": "All operationId values in paths files use kebab-case naming",
+      "type": "convention"
+    },
+    {
+      "id": "schema-names-pascal-case",
+      "text": "All schema names under components.schemas use PascalCase",
+      "type": "convention"
+    },
+    {
+      "id": "refs-correct-format",
+      "text": "$ref values use the format ../components/schemas/<file>.json#/components/schemas/<Name>",
+      "type": "convention"
+    },
+    {
+      "id": "paths-files-standalone",
+      "text": "Each paths/*.json file is a standalone OpenAPI document with openapi, info, servers, and paths fields",
+      "type": "convention"
+    },
+    {
+      "id": "environments-json-valid",
+      "text": ".openapi-puer/environments.json exists with a Default environment entry including id, name, baseUrl, timestamps",
+      "type": "content"
+    },
+    {
+      "id": "readme-exists",
+      "text": "README.md exists with folder structure documentation",
+      "type": "structural"
+    },
+    {
+      "id": "valid-json",
+      "text": "All JSON files are valid parseable JSON with 2-space indentation",
+      "type": "structural"
+    }
+  ]
+}
