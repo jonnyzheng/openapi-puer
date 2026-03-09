@@ -688,7 +688,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle environment changes
   environmentService.onEnvironmentsChange(() => {
-    updatePanelEnvironments();
+    updatePanelEnvironments({ reloadFromDisk: false });
   });
 
   // Initial load - clear cache to ensure fresh parsing
@@ -1277,21 +1277,42 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
 
 
 
-function updatePanelEnvironments(): void {
-  if (ApiPanel.currentPanel) {
-    syncPanelEnvironments(ApiPanel.currentPanel);
-  }
-}
+type PanelEnvironmentSyncOptions = {
+  reloadFromDisk?: boolean;
+};
 
-function syncPanelEnvironments(panel: ApiPanel): void {
-  environmentService.reloadEnvironmentsFromDisk();
-  const environments = environmentService.getEnvironments().map(e => ({
+export function collectPanelEnvironmentState(
+  service: Pick<EnvironmentService, 'reloadEnvironmentsFromDisk' | 'getEnvironments' | 'getActiveEnvironment' | 'getActiveEnvironmentId'>,
+  options: PanelEnvironmentSyncOptions = {}
+) {
+  if (options.reloadFromDisk !== false) {
+    service.reloadEnvironmentsFromDisk();
+  }
+
+  const environments = service.getEnvironments().map(e => ({
     id: e.id,
     name: e.name
   }));
-  const activeEnvironment = environmentService.getActiveEnvironment();
-  panel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
-  panel.updateEnvironmentVariables(activeEnvironment?.variables || [], activeEnvironment?.baseUrl);
+  const activeEnvironment = service.getActiveEnvironment();
+
+  return {
+    environments,
+    activeEnvironmentId: service.getActiveEnvironmentId(),
+    activeEnvironmentVariables: activeEnvironment?.variables || [],
+    activeEnvironmentBaseUrl: activeEnvironment?.baseUrl
+  };
+}
+
+function updatePanelEnvironments(options: PanelEnvironmentSyncOptions = {}): void {
+  if (ApiPanel.currentPanel) {
+    syncPanelEnvironments(ApiPanel.currentPanel, options);
+  }
+}
+
+function syncPanelEnvironments(panel: ApiPanel, options: PanelEnvironmentSyncOptions = {}): void {
+  const state = collectPanelEnvironmentState(environmentService, options);
+  panel.updateEnvironments(state.environments, state.activeEnvironmentId);
+  panel.updateEnvironmentVariables(state.activeEnvironmentVariables, state.activeEnvironmentBaseUrl);
 }
 
 async function openEnvironmentManagerFile(): Promise<void> {
