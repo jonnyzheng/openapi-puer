@@ -135,3 +135,7 @@ pnpm run package:vsix
 ```
 
 This creates a .vsix file that can be installed in VS Code.
+
+## License
+
+This project is licensed under Apache-2.0.

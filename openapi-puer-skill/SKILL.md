@@ -1,6 +1,7 @@
 ---
-name: openapi-puer
+name: openapi-puer-skill
 description: "Manage OpenAPI documentation following OpenAPI Puer's multi-file folder structure. Use this skill whenever the user wants to create, edit, scaffold, or manage API documentation — including adding endpoints, schemas, parameters, responses, servers, or environments. Also use it when the user asks to generate an API spec from a natural language description, validate an existing API folder structure, or work with OpenAPI JSON files in the paths/ and components/ directories. Trigger phrases: 'add an endpoint', 'create API docs', 'scaffold API folder', 'add a schema', 'generate OpenAPI', 'new API', 'add parameter', 'manage environments', 'validate API structure'."
+license: Apache-2.0
 ---
 
 # OpenAPI Puer — API Documentation Management
