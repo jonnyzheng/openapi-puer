@@ -1120,6 +1120,20 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  panel.onUpdateSchemaName(async (data) => {
+    const result = await openApiService.renameSchema(data.filePath, data.schemaName, data.newSchemaName);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
   // Handle add schema property
   panel.onAddSchemaProperty(async (data) => {
     const result = await openApiService.addSchemaProperty(data.filePath, data.schemaName, data.property);
@@ -1487,6 +1501,16 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onDeleteSchema(async (data) => {
     const result = await openApiService.deleteSchema(data.filePath, data.schemaName);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onUpdateSchemaName(async (data) => {
+    const result = await openApiService.renameSchema(data.filePath, data.schemaName, data.newSchemaName);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) {
       await refreshApiFiles();

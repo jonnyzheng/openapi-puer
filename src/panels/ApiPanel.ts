@@ -252,6 +252,13 @@ export class ApiPanel {
   }>();
   readonly onUpdateFullSchema = this.onUpdateFullSchemaEmitter.event;
 
+  private onUpdateSchemaNameEmitter = new vscode.EventEmitter<{
+    filePath: string;
+    schemaName: string;
+    newSchemaName: string;
+  }>();
+  readonly onUpdateSchemaName = this.onUpdateSchemaNameEmitter.event;
+
   private onAddComponentParameterEmitter = new vscode.EventEmitter<{
     filePath: string;
     paramKey: string;
@@ -677,6 +684,13 @@ export class ApiPanel {
           schema: Record<string, unknown>;
         });
         break;
+      case 'updateSchemaName':
+        this.onUpdateSchemaNameEmitter.fire(message.payload as {
+          filePath: string;
+          schemaName: string;
+          newSchemaName: string;
+        });
+        break;
       case 'addComponentParameter':
         this.onAddComponentParameterEmitter.fire(message.payload as {
           filePath: string;
@@ -814,6 +828,7 @@ export class ApiPanel {
       <div id="endpoint-info">
         <span id="method-badge" class="method-badge"></span>
         <span id="endpoint-path"></span><span id="query-params-preview"></span>
+        <span id="parameter-type-labels">Cookie, Header, Path, Query</span>
       </div>
       <div id="environment-selector">
         <select id="environment-select">

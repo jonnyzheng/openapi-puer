@@ -296,6 +296,173 @@ suite('OpenApiService Test Suite', () => {
     });
   });
 
+  suite('addParameter', () => {
+    test('should add parameter to an existing operation', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: { responses: { '200': { description: 'OK' } } }
+          }
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const result = await service.addParameter(testFilePath, '/users', 'get', {
+        name: 'limit',
+        in: 'query',
+        type: 'integer',
+        required: false,
+        description: 'Page size'
+      });
+
+      assert.strictEqual(result.success, true);
+
+      const updatedSpec = JSON.parse(fs.readFileSync(testFilePath, 'utf-8'));
+      const parameters = updatedSpec.paths['/users'].get.parameters;
+      assert.strictEqual(parameters.length, 1);
+      assert.strictEqual(parameters[0].name, 'limit');
+      assert.strictEqual(parameters[0].in, 'query');
+      assert.strictEqual(parameters[0].schema.type, 'integer');
+      assert.strictEqual(parameters[0].description, 'Page size');
+      assert.strictEqual(parameters[0].required, undefined);
+    });
+
+    test('should fail when parameter with same name and location already exists', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              parameters: [
+                { name: 'limit', in: 'query', schema: { type: 'integer' } }
+              ],
+              responses: { '200': { description: 'OK' } }
+            }
+          }
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const result = await service.addParameter(testFilePath, '/users', 'get', {
+        name: 'limit',
+        in: 'query',
+        type: 'integer',
+        required: false,
+        description: 'Duplicate'
+      });
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.message?.includes('already exists'));
+    });
+  });
+
+  suite('updateParameter', () => {
+    test('should update type, description, and required flag on an existing parameter', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              parameters: [
+                {
+                  name: 'limit',
+                  in: 'query',
+                  required: true,
+                  description: 'Old description',
+                  schema: { type: 'integer' }
+                }
+              ],
+              responses: { '200': { description: 'OK' } }
+            }
+          }
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const typeResult = await service.updateParameter(testFilePath, '/users', 'get', 'limit', 'query', 'type', 'number');
+      assert.strictEqual(typeResult.success, true);
+
+      const descriptionResult = await service.updateParameter(testFilePath, '/users', 'get', 'limit', 'query', 'description', 'Updated description');
+      assert.strictEqual(descriptionResult.success, true);
+
+      const requiredResult = await service.updateParameter(testFilePath, '/users', 'get', 'limit', 'query', 'required', false);
+      assert.strictEqual(requiredResult.success, true);
+
+      const updatedSpec = JSON.parse(fs.readFileSync(testFilePath, 'utf-8'));
+      const parameter = updatedSpec.paths['/users'].get.parameters[0];
+      assert.strictEqual(parameter.schema.type, 'number');
+      assert.strictEqual(parameter.description, 'Updated description');
+      assert.strictEqual(parameter.required, undefined);
+    });
+  });
+
+  suite('component parameter operations', () => {
+    test('should add a component parameter', async () => {
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'Test API', version: '1.0.0' },
+        components: {
+          parameters: {}
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const result = await service.addComponentParameter(testFilePath, 'PageParam', {
+        name: 'page',
+        in: 'query',
+        type: 'integer',
+        description: 'Page index'
+      });
+
+      assert.strictEqual(result.success, true);
+
+      const updatedSpec = JSON.parse(fs.readFileSync(testFilePath, 'utf-8'));
+      const parameter = updatedSpec.components.parameters.PageParam;
+      assert.strictEqual(parameter.name, 'page');
+      assert.strictEqual(parameter.in, 'query');
+      assert.strictEqual(parameter.schema.type, 'integer');
+      assert.strictEqual(parameter.description, 'Page index');
+    });
+
+    test('should update and rename a component parameter key', async () => {
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'Test API', version: '1.0.0' },
+        components: {
+          parameters: {
+            PageParam: {
+              name: 'page',
+              in: 'query',
+              description: 'Old description',
+              schema: { type: 'integer' }
+            }
+          }
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+
+      const result = await service.updateComponentParameter(testFilePath, 'PageParam', {
+        description: 'Updated description',
+        type: 'number',
+        newKey: 'LimitParam'
+      });
+
+      assert.strictEqual(result.success, true);
+
+      const updatedSpec = JSON.parse(fs.readFileSync(testFilePath, 'utf-8'));
+      assert.strictEqual(updatedSpec.components.parameters.PageParam, undefined);
+      const renamed = updatedSpec.components.parameters.LimitParam;
+      assert.ok(renamed);
+      assert.strictEqual(renamed.name, 'page');
+      assert.strictEqual(renamed.description, 'Updated description');
+      assert.strictEqual(renamed.schema.type, 'number');
+    });
+  });
+
   suite('addEndpoint', () => {
     test('should initialize paths object and add endpoint with default response', async () => {
       const spec = {
@@ -1766,6 +1933,34 @@ suite('OpenApiService Test Suite', () => {
         const parsedFile = await service.parseFile(schemaFilePath);
         assert.ok(parsedFile);
         assert.ok(parsedFile?.components?.schemas);
+      } finally {
+        fs.rmSync(path.join(tempDir, 'components'), { recursive: true, force: true });
+      }
+    });
+
+    test('should create components.parameters template in components/parameters folder', async () => {
+      const parametersDir = path.join(tempDir, 'components', 'parameters');
+      fs.mkdirSync(parametersDir, { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'api.json'), JSON.stringify({ openapi: '3.1.1' }, null, 2));
+
+      try {
+        const result = await service.createFile(parametersDir, 'empty-parameter');
+        const parameterFilePath = path.join(parametersDir, 'empty-parameter.json');
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.path, parameterFilePath);
+
+        const created = JSON.parse(fs.readFileSync(parameterFilePath, 'utf-8'));
+        assert.deepStrictEqual(created, {
+          openapi: '3.1.1',
+          components: {
+            parameters: {}
+          }
+        });
+
+        const parsedFile = await service.parseFile(parameterFilePath);
+        assert.ok(parsedFile);
+        assert.ok(parsedFile?.components?.parameters);
       } finally {
         fs.rmSync(path.join(tempDir, 'components'), { recursive: true, force: true });
       }

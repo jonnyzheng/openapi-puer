@@ -191,8 +191,8 @@
     S.currentFilePath = payload.filePath;
     S.currentFileType = null;
 
-    var hasSchemas = payload.components && payload.components.schemas && Object.keys(payload.components.schemas).length > 0;
-    var hasParameters = payload.components && payload.components.parameters && Object.keys(payload.components.parameters).length > 0;
+    var hasSchemas = payload.components && Object.prototype.hasOwnProperty.call(payload.components, 'schemas');
+    var hasParameters = payload.components && Object.prototype.hasOwnProperty.call(payload.components, 'parameters');
     var isParameterOnly = hasParameters && !hasSchemas;
     S.currentFileType = isParameterOnly ? 'parameter' : 'schema';
 
@@ -1923,6 +1923,70 @@
       var nameSpan = document.createElement('span');
       nameSpan.className = 'component-name';
       nameSpan.textContent = name;
+      nameSpan.addEventListener('click', function() {
+        if (nameSpan.querySelector('input')) return;
+
+        var currentName = name;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'inline-edit-input';
+        input.value = currentName;
+
+        nameSpan.textContent = '';
+        nameSpan.appendChild(input);
+        input.focus();
+        input.select();
+
+        var cancelled = false;
+
+        function restore() {
+          nameSpan.textContent = currentName;
+        }
+
+        function save() {
+          if (cancelled) return;
+
+          var newName = input.value.trim();
+          if (!newName) {
+            restore();
+            S.showSaveStatus(false, 'Schema name is required');
+            return;
+          }
+
+          if (newName === currentName) {
+            restore();
+            return;
+          }
+
+          var schemasMap = (S.currentComponents && S.currentComponents.schemas) || {};
+          if (Object.prototype.hasOwnProperty.call(schemasMap, newName)) {
+            restore();
+            S.showSaveStatus(false, 'Schema "' + newName + '" already exists');
+            return;
+          }
+
+          restore();
+          S.vscode.postMessage({
+            type: 'updateSchemaName',
+            payload: {
+              filePath: S.currentFilePath,
+              schemaName: currentName,
+              newSchemaName: newName
+            }
+          });
+        }
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          } else if (e.key === 'Escape') {
+            cancelled = true;
+            restore();
+          }
+        });
+      });
 
       var typeSpan = document.createElement('span');
       typeSpan.className = 'component-type';
@@ -2148,6 +2212,66 @@
     var nameSpan = document.createElement('span');
     nameSpan.className = 'component-name';
     nameSpan.textContent = paramKey;
+    nameSpan.addEventListener('click', function() {
+      if (nameSpan.querySelector('input')) return;
+
+      var currentKey = paramKey;
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'inline-edit-input';
+      input.value = currentKey;
+
+      nameSpan.textContent = '';
+      nameSpan.appendChild(input);
+      input.focus();
+      input.select();
+
+      var cancelled = false;
+
+      function restore() {
+        nameSpan.textContent = currentKey;
+      }
+
+      function save() {
+        if (cancelled) return;
+
+        var newKey = input.value.trim();
+        if (!newKey) {
+          restore();
+          S.showSaveStatus(false, 'Parameter key is required');
+          return;
+        }
+
+        if (newKey === currentKey) {
+          restore();
+          return;
+        }
+
+        var params = (S.currentComponents && S.currentComponents.parameters) || {};
+        if (Object.prototype.hasOwnProperty.call(params, newKey)) {
+          restore();
+          S.showSaveStatus(false, 'Parameter "' + newKey + '" already exists');
+          return;
+        }
+
+        restore();
+        S.vscode.postMessage({
+          type: 'updateComponentParameter',
+          payload: { filePath: S.currentFilePath, paramKey: currentKey, updates: { newKey: newKey } }
+        });
+      }
+
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          input.blur();
+        } else if (e.key === 'Escape') {
+          cancelled = true;
+          restore();
+        }
+      });
+    });
 
     var locationBadge = document.createElement('span');
     locationBadge.className = 'component-type ' + (LOCATION_COLORS[param._paramIn] || '');
@@ -2425,6 +2549,33 @@
     return obj;
   }
 
+  function getLocationFromParameterFilePath(filePath) {
+    if (!filePath) return null;
+    var normalizedPath = String(filePath).replace(/\\/g, '/');
+    var fileName = normalizedPath.split('/').pop() || '';
+    var baseName = fileName.replace(/\.json$/i, '').toLowerCase();
+    return Object.prototype.hasOwnProperty.call(LOCATION_COLORS, baseName) ? baseName : null;
+  }
+
+  function inferLocationFromParameters(parameters) {
+    var locationCounts = {};
+    Object.keys(parameters || {}).forEach(function(key) {
+      var loc = parameters[key]._paramIn || 'query';
+      locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+    });
+
+    var inferredLocation = null;
+    var maxCount = 0;
+    Object.keys(locationCounts).forEach(function(loc) {
+      if (locationCounts[loc] > maxCount) {
+        maxCount = locationCounts[loc];
+        inferredLocation = loc;
+      }
+    });
+
+    return inferredLocation;
+  }
+
   S.showComponentParameterDialog = function() {
     var existingDialog = document.querySelector('.server-dialog-overlay');
     if (existingDialog) existingDialog.remove();
@@ -2433,24 +2584,16 @@
     var isReadOnly = false;
     
     if (S.currentFileType === 'parameter') {
-      // For parameter-only files, find the most common location
-      var parameters = S.currentComponents.parameters || {};
-      var locationCounts = {};
-      Object.keys(parameters).forEach(function(key) {
-        var loc = parameters[key]._paramIn || 'query';
-        locationCounts[loc] = (locationCounts[loc] || 0) + 1;
-      });
-      
-      // Find the most common location
-      var maxCount = 0;
-      Object.keys(locationCounts).forEach(function(loc) {
-        if (locationCounts[loc] > maxCount) {
-          maxCount = locationCounts[loc];
-          defaultLocation = loc;
+      var fileLocation = getLocationFromParameterFilePath(S.currentFilePath);
+      if (fileLocation) {
+        defaultLocation = fileLocation;
+        isReadOnly = true;
+      } else {
+        var inferredLocation = inferLocationFromParameters(S.currentComponents.parameters || {});
+        if (inferredLocation) {
+          defaultLocation = inferredLocation;
         }
-      });
-      
-      isReadOnly = true;
+      }
     }
 
     var overlay = document.createElement('div');

@@ -1958,6 +1958,59 @@ export class OpenApiService {
     }
   }
 
+  async renameSchema(
+    filePath: string,
+    schemaName: string,
+    newSchemaName: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const spec = JSON.parse(content);
+
+      const schemas = this.getSchemasObject(spec);
+      if (!schemas || !schemas[schemaName]) {
+        return { success: false, message: `Schema "${schemaName}" not found` };
+      }
+
+      const trimmedName = newSchemaName.trim();
+      if (!trimmedName) {
+        return { success: false, message: 'Schema name is required' };
+      }
+
+      if (trimmedName === schemaName) {
+        return { success: true };
+      }
+
+      if (schemas[trimmedName]) {
+        return { success: false, message: `Schema "${trimmedName}" already exists` };
+      }
+
+      const renamedSchemas: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(schemas)) {
+        if (key === schemaName) {
+          renamedSchemas[trimmedName] = value;
+        } else {
+          renamedSchemas[key] = value;
+        }
+      }
+
+      for (const key of Object.keys(schemas)) {
+        delete schemas[key];
+      }
+      Object.assign(schemas, renamedSchemas);
+
+      const updatedContent = JSON.stringify(spec, null, 2);
+      await fs.promises.writeFile(filePath, updatedContent, { encoding: 'utf-8', flag: 'w' });
+      this.removeFromCache(filePath);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error renaming schema: ${message}`);
+      return { success: false, message };
+    }
+  }
+
   async addSchemaProperty(
     filePath: string,
     schemaName: string,
@@ -2502,6 +2555,8 @@ export class OpenApiService {
       const normalizedParentPath = parentPath.replace(/\\/g, '/').toLowerCase();
       const isSchemasFolder = normalizedParentPath.endsWith('components/schemas')
         || normalizedParentPath.includes('/components/schemas/');
+      const isParametersFolder = normalizedParentPath.endsWith('components/parameters')
+        || normalizedParentPath.includes('/components/parameters/');
       const isResponsesFolder = normalizedParentPath.endsWith('components/responses')
         || normalizedParentPath.includes('/components/responses/');
       const isRequestBodiesFolder = normalizedParentPath.endsWith('components/requestbodies')
@@ -2509,6 +2564,8 @@ export class OpenApiService {
 
       const template = isRequestBodiesFolder
         ? { openapi: canonicalVersion, requestBodies: {} }
+        : isParametersFolder
+        ? { openapi: canonicalVersion, components: { parameters: {} } }
         : isSchemasFolder
         ? { openapi: canonicalVersion, components: { schemas: {} } }
         : isResponsesFolder
