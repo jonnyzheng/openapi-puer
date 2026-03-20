@@ -73,6 +73,45 @@
     return schema[key] !== undefined && schema[key] !== null;
   }
 
+  function getParameterLocationSummary(parameters) {
+    var locationLabelMap = {
+      cookie: 'Cookie',
+      header: 'Header',
+      path: 'Path',
+      query: 'Query'
+    };
+    var orderedLocations = ['cookie', 'header', 'path', 'query'];
+    var seenLocations = {};
+
+    Object.keys(parameters || {}).forEach(function(key) {
+      var param = parameters[key] || {};
+      var location = typeof param._paramIn === 'string' ? param._paramIn.toLowerCase() : '';
+      if (Object.prototype.hasOwnProperty.call(locationLabelMap, location)) {
+        seenLocations[location] = true;
+      }
+    });
+
+    var labels = orderedLocations
+      .filter(function(location) { return !!seenLocations[location]; })
+      .map(function(location) { return locationLabelMap[location]; });
+
+    if (labels.length === 0) {
+      return orderedLocations.map(function(location) { return locationLabelMap[location]; }).join(', ');
+    }
+
+    return labels.join(', ');
+  }
+
+  function updateParameterLocationHeader() {
+    if (S.currentFileType !== 'parameter') return;
+
+    var endpointPath = document.getElementById('endpoint-path');
+    if (!endpointPath) return;
+
+    var parameters = (S.currentComponents && S.currentComponents.parameters) || {};
+    endpointPath.textContent = getParameterLocationSummary(parameters);
+  }
+
   S.renderComponents = function() {
     const escapeHtml = S.escapeHtml;
     const capitalizeFirst = S.capitalizeFirst;
@@ -247,12 +286,15 @@
     }
 
     var badgeLabel = isParameterOnly ? 'PARAMS' : 'SCHEMA';
+    var endpointPathLabel = isParameterOnly
+      ? getParameterLocationSummary((payload.components && payload.components.parameters) || {})
+      : (payload.title || 'Schemas');
 
     container.innerHTML = `
       <div id="header">
         <div id="endpoint-info">
           <span class="method-badge schema-badge">${badgeLabel}</span>
-          <span id="endpoint-path">${escapeHtml(payload.title || 'Schemas')}</span>
+          <span id="endpoint-path">${escapeHtml(endpointPathLabel)}</span>
         </div>
       </div>
 
@@ -2199,6 +2241,8 @@
       section.appendChild(sectionContent);
       container.appendChild(section);
     });
+
+    updateParameterLocationHeader();
   };
 
   function createParameterCard(paramKey, param, escapeHtml) {
@@ -2332,12 +2376,13 @@
     // Helper: create editable row
     function addRow(label, value, field, inputType) {
       var tr = document.createElement('tr');
+      var isReadOnlyLocationRow = inputType === 'select' && field === 'in' && S.currentFileType === 'parameter';
 
       var labelTd = document.createElement('td');
       labelTd.innerHTML = '<strong>' + escapeHtml(label) + '</strong>';
 
       var valueTd = document.createElement('td');
-      valueTd.className = 'editable-cell';
+      valueTd.className = isReadOnlyLocationRow ? '' : 'editable-cell';
 
       if (inputType === 'toggle') {
         var switchLabel = document.createElement('label');
@@ -2363,44 +2408,46 @@
         span.className = 'editable-cell-value';
         span.textContent = value || '—';
         valueTd.appendChild(span);
-        valueTd.addEventListener('click', function() {
-          if (valueTd.querySelector('select')) return;
-          var select = document.createElement('select');
-          select.className = 'inline-edit-select';
-          var options = [];
-          if (field === 'in') {
-            options = ['path', 'query', 'header', 'cookie'];
-          } else if (field === 'type') {
-            options = ['string', 'integer', 'number', 'boolean', 'array'];
-          }
-          options.forEach(function(opt) {
-            var option = document.createElement('option');
-            option.value = opt;
-            option.textContent = opt;
-            if (opt === value) option.selected = true;
-            select.appendChild(option);
-          });
-          valueTd.innerHTML = '';
-          valueTd.appendChild(select);
-          select.focus();
-
-          function save() {
-            var newVal = select.value;
-            if (newVal !== value) {
-              var updates = {};
-              updates[field] = newVal;
-              S.vscode.postMessage({
-                type: 'updateComponentParameter',
-                payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
-              });
+        if (!isReadOnlyLocationRow) {
+          valueTd.addEventListener('click', function() {
+            if (valueTd.querySelector('select')) return;
+            var select = document.createElement('select');
+            select.className = 'inline-edit-select';
+            var options = [];
+            if (field === 'in') {
+              options = ['path', 'query', 'header', 'cookie'];
+            } else if (field === 'type') {
+              options = ['string', 'integer', 'number', 'boolean', 'array'];
             }
-            span.textContent = newVal || '—';
+            options.forEach(function(opt) {
+              var option = document.createElement('option');
+              option.value = opt;
+              option.textContent = opt;
+              if (opt === value) option.selected = true;
+              select.appendChild(option);
+            });
             valueTd.innerHTML = '';
-            valueTd.appendChild(span);
-          }
-          select.addEventListener('blur', save);
-          select.addEventListener('change', save);
-        });
+            valueTd.appendChild(select);
+            select.focus();
+
+            function save() {
+              var newVal = select.value;
+              if (newVal !== value) {
+                var updates = {};
+                updates[field] = newVal;
+                S.vscode.postMessage({
+                  type: 'updateComponentParameter',
+                  payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
+                });
+              }
+              span.textContent = newVal || '—';
+              valueTd.innerHTML = '';
+              valueTd.appendChild(span);
+            }
+            select.addEventListener('blur', save);
+            select.addEventListener('change', save);
+          });
+        }
       } else {
         var span = document.createElement('span');
         span.className = 'editable-cell-value';
