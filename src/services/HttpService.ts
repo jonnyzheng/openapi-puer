@@ -164,9 +164,18 @@ export class HttpService {
   private substituteVariables(text: string, variables: Record<string, string>): string {
     if (!text) return text;
 
-    return text.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, (match, varName) => {
-      if (varName in variables) {
+    const hasVariable = (variableName: string): boolean => Object.prototype.hasOwnProperty.call(variables, variableName);
+
+    const substitutedText = text.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, (match, varName) => {
+      if (hasVariable(varName)) {
         return variables[varName];
+      }
+      return match;
+    });
+
+    return substitutedText.replace(/%7B%7B([a-zA-Z0-9_.-]+)%7D%7D/gi, (match, varName) => {
+      if (hasVariable(varName)) {
+        return encodeURIComponent(variables[varName]);
       }
       return match;
     });

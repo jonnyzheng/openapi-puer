@@ -828,7 +828,7 @@ export class ApiPanel {
       <div id="endpoint-info">
         <span id="method-badge" class="method-badge"></span>
         <span id="endpoint-path"></span><span id="query-params-preview"></span>
-        <span id="parameter-type-labels">Cookie, Header, Path, Query</span>
+        <span id="parameter-type-labels"></span>
       </div>
       <div id="environment-selector">
         <select id="environment-select">
