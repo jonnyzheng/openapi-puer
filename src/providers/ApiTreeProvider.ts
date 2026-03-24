@@ -227,8 +227,8 @@ export class ApiTreeProvider implements vscode.TreeDataProvider<ApiTreeItem> {
       const isParseErrorFile = !!file.parseError;
       const isApiJson = !isParseErrorFile && file.fileName.toLowerCase() === 'api.json';
       const isComponentFile = !isParseErrorFile && !isApiJson && file.endpoints.length === 0 && !!file.components;
-      const hasSchemas = isComponentFile && !!file.components?.schemas && Object.keys(file.components.schemas).length > 0;
-      const hasParameters = isComponentFile && !!file.components?.parameters && Object.keys(file.components.parameters).length > 0;
+      const hasSchemas = isComponentFile && Object.prototype.hasOwnProperty.call(file.components || {}, 'schemas');
+      const hasParameters = isComponentFile && Object.prototype.hasOwnProperty.call(file.components || {}, 'parameters');
       const isParameterOnlyFile = isComponentFile && !hasSchemas && hasParameters;
       const item = new ApiTreeItem(
         file.fileName,

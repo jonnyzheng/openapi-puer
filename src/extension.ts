@@ -669,6 +669,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle file changes
   configService.onFileChange(async (event) => {
+    if (isEnvironmentFilePath(event.uri.fsPath)) {
+      updatePanelEnvironments();
+      return;
+    }
+
     if (event.type === 'delete') {
       openApiService.removeFromCache(event.uri.fsPath);
     }
@@ -688,7 +693,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle environment changes
   environmentService.onEnvironmentsChange(() => {
-    updatePanelEnvironments();
+    updatePanelEnvironments({ reloadFromDisk: false });
   });
 
   // Initial load - clear cache to ensure fresh parsing
@@ -1120,6 +1125,20 @@ function registerPanelHandlers(panel: ApiPanel): void {
     }
   });
 
+  panel.onUpdateSchemaName(async (data) => {
+    const result = await openApiService.renameSchema(data.filePath, data.schemaName, data.newSchemaName);
+
+    panel.notifyOverviewSaved(result.success, result.message);
+
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) {
+        panel.updateSchemas(updatedFile.components);
+      }
+    }
+  });
+
   // Handle add schema property
   panel.onAddSchemaProperty(async (data) => {
     const result = await openApiService.addSchemaProperty(data.filePath, data.schemaName, data.property);
@@ -1277,21 +1296,57 @@ function openApiFilePanel(context: vscode.ExtensionContext, apiFile: ApiFile): v
 
 
 
-function updatePanelEnvironments(): void {
-  if (ApiPanel.currentPanel) {
-    syncPanelEnvironments(ApiPanel.currentPanel);
-  }
-}
+type PanelEnvironmentSyncOptions = {
+  reloadFromDisk?: boolean;
+};
 
-function syncPanelEnvironments(panel: ApiPanel): void {
-  environmentService.reloadEnvironmentsFromDisk();
-  const environments = environmentService.getEnvironments().map(e => ({
+export function collectPanelEnvironmentState(
+  service: Pick<EnvironmentService, 'reloadEnvironmentsFromDisk' | 'getEnvironments' | 'getActiveEnvironment' | 'getActiveEnvironmentId'>,
+  options: PanelEnvironmentSyncOptions = {}
+) {
+  if (options.reloadFromDisk !== false) {
+    service.reloadEnvironmentsFromDisk();
+  }
+
+  const environments = service.getEnvironments().map(e => ({
     id: e.id,
     name: e.name
   }));
-  const activeEnvironment = environmentService.getActiveEnvironment();
-  panel.updateEnvironments(environments, environmentService.getActiveEnvironmentId());
-  panel.updateEnvironmentVariables(activeEnvironment?.variables || [], activeEnvironment?.baseUrl);
+  const activeEnvironment = service.getActiveEnvironment();
+
+  return {
+    environments,
+    activeEnvironmentId: service.getActiveEnvironmentId(),
+    activeEnvironmentVariables: activeEnvironment?.variables || [],
+    activeEnvironmentBaseUrl: activeEnvironment?.baseUrl
+  };
+}
+
+function updatePanelEnvironments(options: PanelEnvironmentSyncOptions = {}): void {
+  if (ApiPanel.currentPanel) {
+    syncPanelEnvironments(ApiPanel.currentPanel, options);
+  }
+}
+
+function isEnvironmentFilePath(filePath: string): boolean {
+  const apiDirectory = configService.getApiDirectory();
+  if (!apiDirectory) {
+    return false;
+  }
+
+  const expectedPath = path.join(apiDirectory, '.openapi-puer', 'environments.json');
+  const normalizeForCompare = (value: string) => {
+    const normalized = path.normalize(value);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  };
+
+  return normalizeForCompare(filePath) === normalizeForCompare(expectedPath);
+}
+
+function syncPanelEnvironments(panel: ApiPanel, options: PanelEnvironmentSyncOptions = {}): void {
+  const state = collectPanelEnvironmentState(environmentService, options);
+  panel.updateEnvironments(state.environments, state.activeEnvironmentId);
+  panel.updateEnvironmentVariables(state.activeEnvironmentVariables, state.activeEnvironmentBaseUrl);
 }
 
 async function openEnvironmentManagerFile(): Promise<void> {
@@ -1466,6 +1521,16 @@ function setupNewTabHandlers(panel: ApiPanel): void {
 
   panel.onDeleteSchema(async (data) => {
     const result = await openApiService.deleteSchema(data.filePath, data.schemaName);
+    panel.notifyOverviewSaved(result.success, result.message);
+    if (result.success) {
+      await refreshApiFiles();
+      const updatedFile = apiFiles.find(f => f.filePath === data.filePath);
+      if (updatedFile?.components) { panel.updateSchemas(updatedFile.components); }
+    }
+  });
+
+  panel.onUpdateSchemaName(async (data) => {
+    const result = await openApiService.renameSchema(data.filePath, data.schemaName, data.newSchemaName);
     panel.notifyOverviewSaved(result.success, result.message);
     if (result.success) {
       await refreshApiFiles();

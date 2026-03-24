@@ -3,8 +3,8 @@
   "displayName": "OpenAPI Puer",
   "description": "A GUI-style API VSCode extension for OpenAPI. Browse, test, and debug OpenAPI endpoints directly in your editor.",
   "icon": "resources/icon.png",
-  "version": "0.1.0",
-  "publisher": "openapi-puer",
+  "version": "0.2.0",
+  "publisher": "jonnyzheng",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

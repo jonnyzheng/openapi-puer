@@ -26,7 +26,7 @@ If the configured folder is empty or missing required files, run **OpenAPI Puer:
 ## OpenAPI Files
 
 - JSON format only
-- Supports OpenAPI 2.0, 3.0, and 3.1
+- Supports OpenAPI 3.0.x, 3.1.x, and 3.2.x
 - Schema-only JSON files are supported if they contain components.schemas
 
 ## First-Time Setup

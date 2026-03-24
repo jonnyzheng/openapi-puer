@@ -73,6 +73,45 @@
     return schema[key] !== undefined && schema[key] !== null;
   }
 
+  function getParameterLocationSummary(parameters) {
+    var locationLabelMap = {
+      cookie: 'Cookie',
+      header: 'Header',
+      path: 'Path',
+      query: 'Query'
+    };
+    var orderedLocations = ['cookie', 'header', 'path', 'query'];
+    var seenLocations = {};
+
+    Object.keys(parameters || {}).forEach(function(key) {
+      var param = parameters[key] || {};
+      var location = typeof param._paramIn === 'string' ? param._paramIn.toLowerCase() : '';
+      if (Object.prototype.hasOwnProperty.call(locationLabelMap, location)) {
+        seenLocations[location] = true;
+      }
+    });
+
+    var labels = orderedLocations
+      .filter(function(location) { return !!seenLocations[location]; })
+      .map(function(location) { return locationLabelMap[location]; });
+
+    if (labels.length === 0) {
+      return orderedLocations.map(function(location) { return locationLabelMap[location]; }).join(', ');
+    }
+
+    return labels.join(', ');
+  }
+
+  function updateParameterLocationHeader() {
+    if (S.currentFileType !== 'parameter') return;
+
+    var endpointPath = document.getElementById('endpoint-path');
+    if (!endpointPath) return;
+
+    var parameters = (S.currentComponents && S.currentComponents.parameters) || {};
+    endpointPath.textContent = getParameterLocationSummary(parameters);
+  }
+
   S.renderComponents = function() {
     const escapeHtml = S.escapeHtml;
     const capitalizeFirst = S.capitalizeFirst;
@@ -191,8 +230,8 @@
     S.currentFilePath = payload.filePath;
     S.currentFileType = null;
 
-    var hasSchemas = payload.components && payload.components.schemas && Object.keys(payload.components.schemas).length > 0;
-    var hasParameters = payload.components && payload.components.parameters && Object.keys(payload.components.parameters).length > 0;
+    var hasSchemas = payload.components && Object.prototype.hasOwnProperty.call(payload.components, 'schemas');
+    var hasParameters = payload.components && Object.prototype.hasOwnProperty.call(payload.components, 'parameters');
     var isParameterOnly = hasParameters && !hasSchemas;
     S.currentFileType = isParameterOnly ? 'parameter' : 'schema';
 
@@ -247,12 +286,15 @@
     }
 
     var badgeLabel = isParameterOnly ? 'PARAMS' : 'SCHEMA';
+    var endpointPathLabel = isParameterOnly
+      ? getParameterLocationSummary((payload.components && payload.components.parameters) || {})
+      : (payload.title || 'Schemas');
 
     container.innerHTML = `
       <div id="header">
         <div id="endpoint-info">
           <span class="method-badge schema-badge">${badgeLabel}</span>
-          <span id="endpoint-path">${escapeHtml(payload.title || 'Schemas')}</span>
+          <span id="endpoint-path">${escapeHtml(endpointPathLabel)}</span>
         </div>
       </div>
 
@@ -1923,6 +1965,70 @@
       var nameSpan = document.createElement('span');
       nameSpan.className = 'component-name';
       nameSpan.textContent = name;
+      nameSpan.addEventListener('click', function() {
+        if (nameSpan.querySelector('input')) return;
+
+        var currentName = name;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'inline-edit-input';
+        input.value = currentName;
+
+        nameSpan.textContent = '';
+        nameSpan.appendChild(input);
+        input.focus();
+        input.select();
+
+        var cancelled = false;
+
+        function restore() {
+          nameSpan.textContent = currentName;
+        }
+
+        function save() {
+          if (cancelled) return;
+
+          var newName = input.value.trim();
+          if (!newName) {
+            restore();
+            S.showSaveStatus(false, 'Schema name is required');
+            return;
+          }
+
+          if (newName === currentName) {
+            restore();
+            return;
+          }
+
+          var schemasMap = (S.currentComponents && S.currentComponents.schemas) || {};
+          if (Object.prototype.hasOwnProperty.call(schemasMap, newName)) {
+            restore();
+            S.showSaveStatus(false, 'Schema "' + newName + '" already exists');
+            return;
+          }
+
+          restore();
+          S.vscode.postMessage({
+            type: 'updateSchemaName',
+            payload: {
+              filePath: S.currentFilePath,
+              schemaName: currentName,
+              newSchemaName: newName
+            }
+          });
+        }
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          } else if (e.key === 'Escape') {
+            cancelled = true;
+            restore();
+          }
+        });
+      });
 
       var typeSpan = document.createElement('span');
       typeSpan.className = 'component-type';
@@ -2135,6 +2241,8 @@
       section.appendChild(sectionContent);
       container.appendChild(section);
     });
+
+    updateParameterLocationHeader();
   };
 
   function createParameterCard(paramKey, param, escapeHtml) {
@@ -2148,6 +2256,66 @@
     var nameSpan = document.createElement('span');
     nameSpan.className = 'component-name';
     nameSpan.textContent = paramKey;
+    nameSpan.addEventListener('click', function() {
+      if (nameSpan.querySelector('input')) return;
+
+      var currentKey = paramKey;
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'inline-edit-input';
+      input.value = currentKey;
+
+      nameSpan.textContent = '';
+      nameSpan.appendChild(input);
+      input.focus();
+      input.select();
+
+      var cancelled = false;
+
+      function restore() {
+        nameSpan.textContent = currentKey;
+      }
+
+      function save() {
+        if (cancelled) return;
+
+        var newKey = input.value.trim();
+        if (!newKey) {
+          restore();
+          S.showSaveStatus(false, 'Parameter key is required');
+          return;
+        }
+
+        if (newKey === currentKey) {
+          restore();
+          return;
+        }
+
+        var params = (S.currentComponents && S.currentComponents.parameters) || {};
+        if (Object.prototype.hasOwnProperty.call(params, newKey)) {
+          restore();
+          S.showSaveStatus(false, 'Parameter "' + newKey + '" already exists');
+          return;
+        }
+
+        restore();
+        S.vscode.postMessage({
+          type: 'updateComponentParameter',
+          payload: { filePath: S.currentFilePath, paramKey: currentKey, updates: { newKey: newKey } }
+        });
+      }
+
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          input.blur();
+        } else if (e.key === 'Escape') {
+          cancelled = true;
+          restore();
+        }
+      });
+    });
 
     var locationBadge = document.createElement('span');
     locationBadge.className = 'component-type ' + (LOCATION_COLORS[param._paramIn] || '');
@@ -2208,12 +2376,13 @@
     // Helper: create editable row
     function addRow(label, value, field, inputType) {
       var tr = document.createElement('tr');
+      var isReadOnlyLocationRow = inputType === 'select' && field === 'in' && S.currentFileType === 'parameter';
 
       var labelTd = document.createElement('td');
       labelTd.innerHTML = '<strong>' + escapeHtml(label) + '</strong>';
 
       var valueTd = document.createElement('td');
-      valueTd.className = 'editable-cell';
+      valueTd.className = isReadOnlyLocationRow ? '' : 'editable-cell';
 
       if (inputType === 'toggle') {
         var switchLabel = document.createElement('label');
@@ -2239,44 +2408,46 @@
         span.className = 'editable-cell-value';
         span.textContent = value || '—';
         valueTd.appendChild(span);
-        valueTd.addEventListener('click', function() {
-          if (valueTd.querySelector('select')) return;
-          var select = document.createElement('select');
-          select.className = 'inline-edit-select';
-          var options = [];
-          if (field === 'in') {
-            options = ['path', 'query', 'header', 'cookie'];
-          } else if (field === 'type') {
-            options = ['string', 'integer', 'number', 'boolean', 'array'];
-          }
-          options.forEach(function(opt) {
-            var option = document.createElement('option');
-            option.value = opt;
-            option.textContent = opt;
-            if (opt === value) option.selected = true;
-            select.appendChild(option);
-          });
-          valueTd.innerHTML = '';
-          valueTd.appendChild(select);
-          select.focus();
-
-          function save() {
-            var newVal = select.value;
-            if (newVal !== value) {
-              var updates = {};
-              updates[field] = newVal;
-              S.vscode.postMessage({
-                type: 'updateComponentParameter',
-                payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
-              });
+        if (!isReadOnlyLocationRow) {
+          valueTd.addEventListener('click', function() {
+            if (valueTd.querySelector('select')) return;
+            var select = document.createElement('select');
+            select.className = 'inline-edit-select';
+            var options = [];
+            if (field === 'in') {
+              options = ['path', 'query', 'header', 'cookie'];
+            } else if (field === 'type') {
+              options = ['string', 'integer', 'number', 'boolean', 'array'];
             }
-            span.textContent = newVal || '—';
+            options.forEach(function(opt) {
+              var option = document.createElement('option');
+              option.value = opt;
+              option.textContent = opt;
+              if (opt === value) option.selected = true;
+              select.appendChild(option);
+            });
             valueTd.innerHTML = '';
-            valueTd.appendChild(span);
-          }
-          select.addEventListener('blur', save);
-          select.addEventListener('change', save);
-        });
+            valueTd.appendChild(select);
+            select.focus();
+
+            function save() {
+              var newVal = select.value;
+              if (newVal !== value) {
+                var updates = {};
+                updates[field] = newVal;
+                S.vscode.postMessage({
+                  type: 'updateComponentParameter',
+                  payload: { filePath: S.currentFilePath, paramKey: paramKey, updates: updates }
+                });
+              }
+              span.textContent = newVal || '—';
+              valueTd.innerHTML = '';
+              valueTd.appendChild(span);
+            }
+            select.addEventListener('blur', save);
+            select.addEventListener('change', save);
+          });
+        }
       } else {
         var span = document.createElement('span');
         span.className = 'editable-cell-value';
@@ -2425,6 +2596,33 @@
     return obj;
   }
 
+  function getLocationFromParameterFilePath(filePath) {
+    if (!filePath) return null;
+    var normalizedPath = String(filePath).replace(/\\/g, '/');
+    var fileName = normalizedPath.split('/').pop() || '';
+    var baseName = fileName.replace(/\.json$/i, '').toLowerCase();
+    return Object.prototype.hasOwnProperty.call(LOCATION_COLORS, baseName) ? baseName : null;
+  }
+
+  function inferLocationFromParameters(parameters) {
+    var locationCounts = {};
+    Object.keys(parameters || {}).forEach(function(key) {
+      var loc = parameters[key]._paramIn || 'query';
+      locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+    });
+
+    var inferredLocation = null;
+    var maxCount = 0;
+    Object.keys(locationCounts).forEach(function(loc) {
+      if (locationCounts[loc] > maxCount) {
+        maxCount = locationCounts[loc];
+        inferredLocation = loc;
+      }
+    });
+
+    return inferredLocation;
+  }
+
   S.showComponentParameterDialog = function() {
     var existingDialog = document.querySelector('.server-dialog-overlay');
     if (existingDialog) existingDialog.remove();
@@ -2433,24 +2631,16 @@
     var isReadOnly = false;
     
     if (S.currentFileType === 'parameter') {
-      // For parameter-only files, find the most common location
-      var parameters = S.currentComponents.parameters || {};
-      var locationCounts = {};
-      Object.keys(parameters).forEach(function(key) {
-        var loc = parameters[key]._paramIn || 'query';
-        locationCounts[loc] = (locationCounts[loc] || 0) + 1;
-      });
-      
-      // Find the most common location
-      var maxCount = 0;
-      Object.keys(locationCounts).forEach(function(loc) {
-        if (locationCounts[loc] > maxCount) {
-          maxCount = locationCounts[loc];
-          defaultLocation = loc;
+      var fileLocation = getLocationFromParameterFilePath(S.currentFilePath);
+      if (fileLocation) {
+        defaultLocation = fileLocation;
+        isReadOnly = true;
+      } else {
+        var inferredLocation = inferLocationFromParameters(S.currentComponents.parameters || {});
+        if (inferredLocation) {
+          defaultLocation = inferredLocation;
         }
-      });
-      
-      isReadOnly = true;
+      }
     }
 
     var overlay = document.createElement('div');

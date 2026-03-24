@@ -67,4 +67,24 @@ suite('ApiTreeProvider Test Suite', () => {
       assert.strictEqual(brokenItem.iconPath.id, 'warning');
     }
   });
+
+  test('should classify empty parameter component files as parameter files', async () => {
+    const parameterFile = createApiFile(path.join(tempDir, 'components', 'parameters', 'query.json'), {
+      components: {
+        parameters: {}
+      }
+    });
+
+    provider.setApiFiles([parameterFile]);
+
+    const items = await provider.getChildren();
+    const parameterItem = items.find((item) => String(item.label) === 'query.json');
+
+    assert.ok(parameterItem);
+    assert.strictEqual(parameterItem?.contextValue, 'file-parameter');
+    assert.ok(parameterItem?.iconPath instanceof vscode.ThemeIcon);
+    if (parameterItem?.iconPath instanceof vscode.ThemeIcon) {
+      assert.strictEqual(parameterItem.iconPath.id, 'symbol-parameter');
+    }
+  });
 });
