@@ -669,6 +669,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle file changes
   configService.onFileChange(async (event) => {
+    if (isEnvironmentFilePath(event.uri.fsPath)) {
+      updatePanelEnvironments();
+      return;
+    }
+
     if (event.type === 'delete') {
       openApiService.removeFromCache(event.uri.fsPath);
     }
@@ -1321,6 +1326,21 @@ function updatePanelEnvironments(options: PanelEnvironmentSyncOptions = {}): voi
   if (ApiPanel.currentPanel) {
     syncPanelEnvironments(ApiPanel.currentPanel, options);
   }
+}
+
+function isEnvironmentFilePath(filePath: string): boolean {
+  const apiDirectory = configService.getApiDirectory();
+  if (!apiDirectory) {
+    return false;
+  }
+
+  const expectedPath = path.join(apiDirectory, '.openapi-puer', 'environments.json');
+  const normalizeForCompare = (value: string) => {
+    const normalized = path.normalize(value);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  };
+
+  return normalizeForCompare(filePath) === normalizeForCompare(expectedPath);
 }
 
 function syncPanelEnvironments(panel: ApiPanel, options: PanelEnvironmentSyncOptions = {}): void {
