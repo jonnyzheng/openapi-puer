@@ -405,6 +405,7 @@ export class ApiPanel {
       payload: {
         variables: variables.map((variable) => ({
           key: variable.key,
+          value: variable.value,
           description: variable.description,
           isSecret: variable.isSecret,
           type: variable.type

@@ -1812,6 +1812,265 @@ suite('OpenApiService Test Suite', () => {
 
       assert.strictEqual(parsed, null);
     });
+
+    test('should resolve nested internal refs inside externally referenced response schemas', async () => {
+      const componentsDir = path.join(tempDir, 'components', 'schemas');
+      fs.mkdirSync(componentsDir, { recursive: true });
+
+      const tasksSchemaPath = path.join(componentsDir, 'tasks.json');
+      const tasksSchema = {
+        components: {
+          schemas: {
+            Task: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer' },
+                title: { type: 'string' }
+              }
+            },
+            TaskInfoResponse: {
+              type: 'object',
+              properties: {
+                task: { $ref: '#/components/schemas/Task' }
+              },
+              required: ['task']
+            }
+          }
+        }
+      };
+      fs.writeFileSync(tasksSchemaPath, JSON.stringify(tasksSchema, null, 2));
+
+      const endpointSpec = {
+        openapi: '3.1.1',
+        info: {
+          title: 'common_task',
+          version: '1.0.0'
+        },
+        paths: {
+          '/api/v1/tasks/draft': {
+            post: {
+              operationId: 'create-draft-task',
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          status: { type: 'string' },
+                          data: {
+                            $ref: './components/schemas/tasks.json#/components/schemas/TaskInfoResponse'
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+      fs.writeFileSync(testFilePath, JSON.stringify(endpointSpec, null, 2));
+
+      const parsed = await service.parseFile(testFilePath);
+      const endpoint = parsed?.endpoints.find((e) => e.operationId === 'create-draft-task');
+      const response200 = endpoint?.responses.find((r) => r.statusCode === '200');
+      const appJsonSchema = response200?.content?.['application/json']?.schema;
+
+      assert.ok(appJsonSchema?.properties?.data?.properties?.task?.properties?.id);
+      assert.strictEqual(appJsonSchema?.properties?.data?.properties?.task?.properties?.id?.type, 'integer');
+    });
+
+    test('should resolve percent-encoded internal ref segments in bundled-like pointers', async () => {
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'encoded-refs', version: '1.0.0' },
+        paths: {
+          '/api/v1/tasks/draft': {
+            post: {
+              operationId: 'create-draft-task',
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          data: {
+                            type: 'object',
+                            properties: {
+                              task: {
+                                $ref: '#/paths/~1api~1v1~1task~1%7Buuid%7D/post/responses/200/content/application~1json/schema/properties/data/properties/task'
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '/api/v1/task/{uuid}': {
+            post: {
+              responses: {
+                '200': {
+                  description: 'Task details',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          data: {
+                            type: 'object',
+                            properties: {
+                              task: {
+                                type: 'object',
+                                properties: {
+                                  id: { type: 'integer' }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+      const parsed = await service.parseFile(testFilePath);
+      const endpoint = parsed?.endpoints.find((e) => e.operationId === 'create-draft-task');
+      const response200 = endpoint?.responses.find((r) => r.statusCode === '200');
+      const taskSchema = response200?.content?.['application/json']?.schema?.properties?.data?.properties?.task;
+
+      assert.strictEqual(taskSchema?.type, 'object');
+      assert.strictEqual(taskSchema?.properties?.id?.type, 'integer');
+    });
+
+    test('should keep unresolved response source for Source tab while resolving visual schema', async () => {
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'source-tab-ref', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              operationId: 'get-users',
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: { $ref: '#/components/schemas/User' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            User: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer' },
+                name: { type: 'string' }
+              }
+            }
+          }
+        }
+      };
+
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+      const parsed = await service.parseFile(testFilePath);
+      const endpoint = parsed?.endpoints.find((e) => e.operationId === 'get-users');
+      const response200 = endpoint?.responses.find((r) => r.statusCode === '200');
+
+      const sourceSchemaRef = (response200?._source?.content as Record<string, unknown> | undefined)
+        ?.['application/json'] as Record<string, unknown> | undefined;
+      const sourceRefValue = (sourceSchemaRef?.schema as Record<string, unknown> | undefined)?.$ref;
+
+      assert.strictEqual(sourceRefValue, '#/components/schemas/User');
+      assert.strictEqual(response200?.content?.['application/json']?.schema?.type, 'object');
+      assert.strictEqual(response200?.content?.['application/json']?.schema?.properties?.id?.type, 'integer');
+    });
+
+    test('should keep external $ref in response source from original file', async () => {
+      const schemaDir = path.join(tempDir, 'components', 'schemas');
+      fs.mkdirSync(schemaDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(schemaDir, 'tasks.json'),
+        JSON.stringify({
+          components: {
+            schemas: {
+              TaskInfoResponse: {
+                type: 'object',
+                properties: {
+                  task: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'integer' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }, null, 2)
+      );
+
+      const spec = {
+        openapi: '3.1.1',
+        info: { title: 'external-source-ref', version: '1.0.0' },
+        paths: {
+          '/draft': {
+            post: {
+              operationId: 'create-draft-task',
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          data: {
+                            $ref: './components/schemas/tasks.json#/components/schemas/TaskInfoResponse'
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+
+      fs.writeFileSync(testFilePath, JSON.stringify(spec, null, 2));
+      const parsed = await service.parseFile(testFilePath);
+      const endpoint = parsed?.endpoints.find((e) => e.operationId === 'create-draft-task');
+      const response200 = endpoint?.responses.find((r) => r.statusCode === '200');
+      const sourceDataRef = (((response200?._source?.content as Record<string, unknown> | undefined)
+        ?.['application/json'] as Record<string, unknown> | undefined)
+        ?.schema as Record<string, unknown> | undefined)
+        ?.properties as Record<string, unknown> | undefined;
+      const dataRef = (sourceDataRef?.data as Record<string, unknown> | undefined)?.$ref;
+
+      assert.strictEqual(dataRef, './components/schemas/tasks.json#/components/schemas/TaskInfoResponse');
+      assert.strictEqual(response200?.content?.['application/json']?.schema?.properties?.data?.properties?.task?.properties?.id?.type, 'integer');
+    });
   });
 
   suite('scanDirectory', () => {
