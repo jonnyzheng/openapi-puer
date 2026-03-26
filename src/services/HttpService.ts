@@ -36,9 +36,9 @@ export class HttpService {
       for (const [key, value] of Object.entries(config.pathParams)) {
         const substitutedValue = this.substituteVariables(value, environmentVariables);
         if (hasRequestUrl) {
-          url = url.split(`{${key}}`).join(encodeURIComponent(substitutedValue));
+          url = this.replacePathParamToken(url, key, encodeURIComponent(substitutedValue));
         } else {
-          path = path.replace(`{${key}}`, encodeURIComponent(substitutedValue));
+          path = this.replacePathParamToken(path, key, encodeURIComponent(substitutedValue));
         }
       }
 
@@ -253,6 +253,24 @@ export class HttpService {
     return (timeoutMs / 1000).toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
   }
 
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Replace single-brace path params like "{id}" while preserving
+   * double-brace variables like "{{id}}".
+   */
+  private replacePathParamToken(text: string, key: string, replacement: string): string {
+    if (!text || !key) {
+      return text;
+    }
+
+    const escapedKey = this.escapeRegExp(key);
+    const pattern = new RegExp(`(^|[^\\{])\\{${escapedKey}\\}(?!\\})`, 'g');
+    return text.replace(pattern, (_match, prefix: string) => `${prefix}${replacement}`);
+  }
+
   buildCurlCommand(
     config: RequestConfig,
     environmentVariables: Record<string, string> = {}
@@ -279,9 +297,9 @@ export class HttpService {
     for (const [key, value] of Object.entries(config.pathParams)) {
       const substitutedValue = this.substituteVariables(value, environmentVariables);
       if (hasRequestUrl) {
-        url = url.split(`{${key}}`).join(encodeURIComponent(substitutedValue));
+        url = this.replacePathParamToken(url, key, encodeURIComponent(substitutedValue));
       } else {
-        path = path.replace(`{${key}}`, encodeURIComponent(substitutedValue));
+        path = this.replacePathParamToken(path, key, encodeURIComponent(substitutedValue));
       }
     }
 

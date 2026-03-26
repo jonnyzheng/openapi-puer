@@ -32,6 +32,11 @@ interface ParseFileResult {
   parseError?: string;
 }
 
+interface ExternalRefResolution {
+  resolved: unknown;
+  sourceSpec: OpenAPI.Document | Record<string, unknown>;
+}
+
 export class OpenApiService {
   private cache: Map<string, CacheEntry> = new Map();
   private outputChannel: vscode.OutputChannel;
@@ -108,7 +113,7 @@ export class OpenApiService {
         title: this.getTitle(spec),
         description: this.getDescription(spec),
         servers: this.getServers(spec),
-        endpoints: this.extractEndpoints(filePath, spec, content),
+        endpoints: this.extractEndpoints(filePath, spec, content, parsed),
         components: this.extractComponents(spec, filePath)
       };
 
@@ -355,7 +360,7 @@ export class OpenApiService {
     return jsonFiles;
   }
 
-  extractEndpoints(filePath: string, spec: OpenAPI.Document, rawContent?: string): ApiEndpoint[] {
+  extractEndpoints(filePath: string, spec: OpenAPI.Document, rawContent?: string, rawSpec?: unknown): ApiEndpoint[] {
     const endpoints: ApiEndpoint[] = [];
     const paths = (spec as OpenAPIV3.Document).paths || (spec as OpenAPIV2.Document).paths;
 
@@ -384,7 +389,7 @@ export class OpenApiService {
           deprecated: operation.deprecated,
           parameters: this.extractParameters(operation, pathItem, spec, filePath),
           requestBody: this.extractRequestBody(operation, spec, filePath),
-          responses: this.extractResponses(operation, spec, filePath, rawContent, pathStr, method)
+          responses: this.extractResponses(operation, spec, filePath, rawContent, pathStr, method, rawSpec)
         };
 
         endpoints.push(endpoint);
@@ -478,7 +483,8 @@ export class OpenApiService {
     filePath?: string,
     rawContent?: string,
     pathStr?: string,
-    method?: string
+    method?: string,
+    rawSpec?: unknown
   ): ApiResponse[] {
     const responses: ApiResponse[] = [];
 
@@ -494,11 +500,13 @@ export class OpenApiService {
     for (const [statusCode, response] of Object.entries(operation.responses)) {
       const resolved = this.resolveRef(response, spec) as OpenAPIV3.ResponseObject | OpenAPIV2.ResponseObject;
       if (!resolved) continue;
+      const rawResponseSource = this.getRawResponseSource(rawSpec, pathStr, method, statusCode);
 
       const apiResponse: ApiResponse = {
         statusCode,
         description: resolved.description,
-        _source: JSON.parse(JSON.stringify(resolved)) // Store original source
+        // Keep source from original file for Source tab, so $ref stays as authored.
+        _source: rawResponseSource || JSON.parse(JSON.stringify(response))
       };
 
       // OpenAPI 3.x
@@ -539,6 +547,44 @@ export class OpenApiService {
     }
 
     return responses;
+  }
+
+  private getRawResponseSource(
+    rawSpec: unknown,
+    pathStr?: string,
+    method?: string,
+    statusCode?: string
+  ): Record<string, unknown> | undefined {
+    if (!rawSpec || typeof rawSpec !== 'object' || !pathStr || !method || !statusCode) {
+      return undefined;
+    }
+
+    const rawPaths = (rawSpec as { paths?: Record<string, unknown> }).paths;
+    if (!rawPaths || typeof rawPaths !== 'object') {
+      return undefined;
+    }
+
+    const pathItem = rawPaths[pathStr] as Record<string, unknown> | undefined;
+    if (!pathItem || typeof pathItem !== 'object') {
+      return undefined;
+    }
+
+    const rawOperation = pathItem[method] as Record<string, unknown> | undefined;
+    if (!rawOperation || typeof rawOperation !== 'object') {
+      return undefined;
+    }
+
+    const rawResponses = rawOperation.responses as Record<string, unknown> | undefined;
+    if (!rawResponses || typeof rawResponses !== 'object') {
+      return undefined;
+    }
+
+    const rawResponse = rawResponses[statusCode];
+    if (!rawResponse || typeof rawResponse !== 'object') {
+      return undefined;
+    }
+
+    return JSON.parse(JSON.stringify(rawResponse)) as Record<string, unknown>;
   }
 
   /**
@@ -627,9 +673,11 @@ export class OpenApiService {
   private extractSchema(
     schema: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject | OpenAPIV2.SchemaObject | undefined,
     spec: OpenAPI.Document,
-    filePath?: string
+    filePath?: string,
+    refContextSpec?: OpenAPI.Document | Record<string, unknown>
   ): SchemaObject | undefined {
     if (!schema) return undefined;
+    const activeSpec = refContextSpec || spec;
 
     // Capture the $ref name before resolving
     const refObj = schema as { $ref?: string };
@@ -643,7 +691,12 @@ export class OpenApiService {
           const refParts = refObj.$ref.split('/');
           refName = this.decodeJsonPointer(refParts[refParts.length - 1]);
           // Process the externally resolved schema
-          const result = this.extractSchema(externalResolved as OpenAPIV3.SchemaObject, spec, filePath);
+          const result = this.extractSchema(
+            externalResolved.resolved as OpenAPIV3.SchemaObject,
+            spec,
+            filePath,
+            externalResolved.sourceSpec
+          );
           if (result) {
             result.$ref = refName;
           }
@@ -655,7 +708,7 @@ export class OpenApiService {
       refName = refParts[refParts.length - 1];
     }
 
-    const resolved = this.resolveRef(schema, spec) as OpenAPIV3.SchemaObject | OpenAPIV2.SchemaObject;
+    const resolved = this.resolveRef(schema, activeSpec) as OpenAPIV3.SchemaObject | OpenAPIV2.SchemaObject;
     if (!resolved) return undefined;
 
     // Handle allOf - merge all schemas into one
@@ -663,7 +716,7 @@ export class OpenApiService {
     if (resolvedAny.allOf && Array.isArray(resolvedAny.allOf)) {
       const extractedSchemas: SchemaObject[] = [];
       for (const subSchema of resolvedAny.allOf) {
-        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath, activeSpec);
         if (extracted) {
           extractedSchemas.push(extracted);
         }
@@ -684,7 +737,7 @@ export class OpenApiService {
         oneOf: []
       };
       for (const subSchema of resolvedAny.oneOf) {
-        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath, activeSpec);
         if (extracted) {
           result.oneOf!.push(extracted);
         }
@@ -704,7 +757,7 @@ export class OpenApiService {
         anyOf: []
       };
       for (const subSchema of resolvedAny.anyOf) {
-        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath);
+        const extracted = this.extractSchema(subSchema as OpenAPIV3.SchemaObject, spec, filePath, activeSpec);
         if (extracted) {
           result.anyOf!.push(extracted);
         }
@@ -728,19 +781,19 @@ export class OpenApiService {
     if (resolved.properties) {
       result.properties = {};
       for (const [key, value] of Object.entries(resolved.properties)) {
-        result.properties[key] = this.extractSchema(value, spec, filePath) || {};
+        result.properties[key] = this.extractSchema(value, spec, filePath, activeSpec) || {};
       }
     }
 
     // Recursively process array items
     if ('items' in resolved && resolved.items) {
-      result.items = this.extractSchema(resolved.items as OpenAPIV3.SchemaObject, spec, filePath);
+      result.items = this.extractSchema(resolved.items as OpenAPIV3.SchemaObject, spec, filePath, activeSpec);
     }
 
     return result;
   }
 
-  private resolveRef(obj: unknown, spec: OpenAPI.Document): unknown {
+  private resolveRef(obj: unknown, spec: OpenAPI.Document | Record<string, unknown>): unknown {
     if (!obj || typeof obj !== 'object') return obj;
 
     const refObj = obj as { $ref?: string };
@@ -750,8 +803,9 @@ export class OpenApiService {
     let resolved: unknown = spec;
 
     for (const part of refPath) {
+      const decodedPart = this.decodeRefSegment(part);
       if (resolved && typeof resolved === 'object') {
-        resolved = (resolved as Record<string, unknown>)[part];
+        resolved = (resolved as Record<string, unknown>)[decodedPart];
       } else {
         return undefined;
       }
@@ -770,6 +824,19 @@ export class OpenApiService {
   }
 
   /**
+   * Decode a $ref segment (URI encoding + JSON Pointer escaping).
+   */
+  private decodeRefSegment(segment: string): string {
+    let decoded = segment;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      decoded = segment;
+    }
+    return this.decodeJsonPointer(decoded);
+  }
+
+  /**
    * Resolve external $ref paths (relative file references)
    * e.g., "../components/responses/successResponse/content/application~1json/schema"
    */
@@ -777,7 +844,7 @@ export class OpenApiService {
     refPath: string,
     currentFilePath: string,
     spec: OpenAPI.Document
-  ): unknown {
+  ): ExternalRefResolution | undefined {
     try {
       // Split into file path and JSON pointer parts
       const hashIndex = refPath.indexOf('#');
@@ -858,7 +925,7 @@ export class OpenApiService {
         let resolved: unknown = targetSpec;
 
         for (const part of pointerPath) {
-          const decodedPart = this.decodeJsonPointer(part);
+          const decodedPart = this.decodeRefSegment(part);
           if (resolved && typeof resolved === 'object') {
             resolved = (resolved as Record<string, unknown>)[decodedPart];
           } else {
@@ -874,7 +941,7 @@ export class OpenApiService {
           if (targetSpecObj.components && typeof targetSpecObj.components === 'object') {
             resolved = targetSpecObj.components;
             for (const part of pointerPath) {
-              const decodedPart = this.decodeJsonPointer(part);
+              const decodedPart = this.decodeRefSegment(part);
               if (resolved && typeof resolved === 'object') {
                 resolved = (resolved as Record<string, unknown>)[decodedPart];
               } else {
@@ -884,10 +951,16 @@ export class OpenApiService {
           }
         }
 
-        return resolved;
+        return {
+          resolved,
+          sourceSpec: targetSpec as OpenAPI.Document | Record<string, unknown>
+        };
       }
 
-      return targetSpec;
+      return {
+        resolved: targetSpec,
+        sourceSpec: targetSpec as OpenAPI.Document | Record<string, unknown>
+      };
     } catch (error) {
       this.outputChannel.appendLine(`Error resolving external ref ${refPath}: ${error}`);
       return undefined;

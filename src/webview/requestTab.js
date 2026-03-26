@@ -69,6 +69,7 @@
   function normalizeVariableMetadata(variable) {
     return {
       key: typeof variable?.key === 'string' ? variable.key : '',
+      value: typeof variable?.value === 'string' ? variable.value : '',
       description: typeof variable?.description === 'string' ? variable.description : '',
       type: variable?.type === 'secret' || variable?.type === 'url' || variable?.type === 'text'
         ? variable.type
@@ -408,12 +409,68 @@
       return '';
     }
 
+    const variableMap = {};
+    (S._environmentVariables || []).forEach(function(variable) {
+      if (variable?.key) {
+        variableMap[variable.key] = variable.value || '';
+      }
+    });
+
     return value.replace(/\{\{([a-zA-Z0-9_.-]+)\}\}/g, function(match, variableName) {
       if (variableName.toLowerCase() === 'baseurl' && S._activeEnvironmentBaseUrl) {
         return S._activeEnvironmentBaseUrl;
       }
+      if (Object.prototype.hasOwnProperty.call(variableMap, variableName)) {
+        return variableMap[variableName];
+      }
       return match;
     });
+  }
+
+  function collectPathParamValues() {
+    const result = {};
+    const container = document.getElementById('req-path-params');
+    if (!container) {
+      return result;
+    }
+
+    container.querySelectorAll('input[data-param]').forEach(function(input) {
+      const key = input.dataset.param;
+      if (!key) {
+        return;
+      }
+      result[key] = input.value || '';
+    });
+
+    return result;
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function resolvePathParamsInUrl(urlValue) {
+    let value = typeof urlValue === 'string' ? urlValue : '';
+    if (!value) {
+      return '';
+    }
+
+    const pathParams = collectPathParamValues();
+    Object.entries(pathParams).forEach(function([key, rawValue]) {
+      if (!key) {
+        return;
+      }
+      if (typeof rawValue !== 'string' || rawValue.trim() === '') {
+        return;
+      }
+      const encodedValue = encodeURIComponent(rawValue);
+      const pattern = new RegExp(`(^|[^\\{])\\{${escapeRegExp(key)}\\}(?!\\})`, 'g');
+      value = value.replace(pattern, function(_match, prefix) {
+        return `${prefix}${encodedValue}`;
+      });
+    });
+
+    return value;
   }
 
   function syncRequestUrlInputDisplay(input) {
@@ -427,7 +484,8 @@
       return;
     }
 
-    input.value = resolveRequestUrlVariables(templateValue);
+    const withEnv = resolveRequestUrlVariables(templateValue);
+    input.value = resolvePathParamsInUrl(withEnv);
   }
 
   S.updateEnvironmentVariables = function(variables, activeBaseUrl) {
@@ -443,6 +501,7 @@
     if (S._activeEnvironmentBaseUrl && !hasBaseUrlVariable) {
       environmentVariables.push({
         key: 'baseUrl',
+        value: S._activeEnvironmentBaseUrl,
         description: 'Active environment base URL',
         type: 'url',
         isSecret: false
